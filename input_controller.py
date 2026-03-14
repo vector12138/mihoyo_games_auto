@@ -1,7 +1,7 @@
 from pynput.mouse import Controller as MouseController, Button
 from pynput.keyboard import Controller as KeyboardController, Key
 import time
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Union
 from loguru import logger
 
 
@@ -53,7 +53,7 @@ class InputController:
         """双击"""
         self.click(x, y, double=True)
     
-    def press_key(self, key: str | Key):
+    def press_key(self, key: Union[str, Key]):
         """按下并释放单个按键"""
         self.keyboard.press(key)
         self.keyboard.release(key)
@@ -66,7 +66,7 @@ class InputController:
         logger.debug(f"输入文本: {text}")
         time.sleep(self.click_delay)
     
-    def hotkey(self, *keys: str | Key):
+    def hotkey(self, *keys: Union[str, Key]):
         """按下组合键"""
         with self.keyboard.pressed(*keys):
             pass
