@@ -83,22 +83,52 @@ class StarRail(GameBase):
 - 开发者、AI生成方不承担任何直接、间接、附带或衍生的损失和责任
 - 下载、复制、使用本项目即表示您同意本免责声明的全部内容
 
+## 📚 详细文档
+完整的项目文档已创建在 `docs/` 目录中，包含：
+
+### 核心文档
+- 📖 [项目概述](docs/01-项目概述/01-项目简介.md) - 项目目标和架构
+- 🚀 [快速开始](docs/02-快速开始/01-环境要求.md) - 安装和配置指南
+- 🏗️ [架构设计](docs/01-项目概述/03-架构设计.md) - 系统架构和模块设计
+
+### 技术文档
+- 🔧 [核心模块](docs/03-核心模块/) - 各模块详细说明
+- 🎮 [游戏实现](docs/04-游戏实现/) - 游戏自动化实现细节
+- ⚙️ [配置参考](docs/06-配置参考/) - 配置文件详解
+
+### 开发文档
+- 💻 [开发指南](docs/08-开发指南/) - 代码规范和贡献指南
+- 🐛 [故障排除](docs/07-故障排除/) - 常见问题和解决方案
+- 📖 [API参考](docs/09-API参考/) - 模块和类参考文档
+
 ## 📁 项目结构
 ```
 mihoyo_games_auto/
-├── games/                  # 各个游戏实现目录
+├── docs/                   # 📚 详细文档目录
+│   ├── 01-项目概述/        # 项目介绍和架构
+│   ├── 02-快速开始/        # 安装和配置指南
+│   ├── 03-核心模块/        # 核心模块说明
+│   ├── 04-游戏实现/        # 游戏自动化实现
+│   ├── 05-高级功能/        # 高级功能说明
+│   ├── 06-配置参考/        # 配置详解
+│   ├── 07-故障排除/        # 问题解决
+│   ├── 08-开发指南/        # 开发规范
+│   └── 09-API参考/         # API文档
+├── games/                  # 🎮 各个游戏实现目录
 │   ├── genshin.py          # 原神实现
 │   └── zzz.py              # 绝区零实现
-├── screen_capture.py       # BitBlt截图模块
-├── ocr_recognizer.py       # PaddleOCR识别模块
-├── input_controller.py     # 鼠标键盘控制模块
-├── game_base.py            # 游戏基类（核心框架）
-├── config.py               # 配置管理
-├── main.py                 # 主入口
-├── retry_manager.py        # 重试管理器
-├── telegram_notifier.py    # Telegram通知模块
-├── shutdown.py             # 关机模块
-├── requirements.txt        # 依赖列表
-├── config.example.yaml     # 示例配置文件
-└── logs/                   # 日志目录
+├── screen_capture.py       # 📸 BitBlt截图模块
+├── ocr_recognizer.py       # 🔍 PaddleOCR识别模块
+├── input_controller.py     # ⌨️ 鼠标键盘控制模块
+├── game_base.py            # 🏗️ 游戏基类（核心框架）
+├── config.py               # ⚙️ 配置管理
+├── main.py                 # 🚀 主入口
+├── retry_manager.py        # 🔄 重试管理器
+├── telegram_notifier.py    # 📱 Telegram通知模块
+├── shutdown.py             # ⏰ 关机模块
+├── requirements.txt        # 📦 依赖列表
+├── config.example.yaml     # 📄 示例配置文件
+├── REQUIREMENTS_README.md  # 📖 依赖包详细说明
+├── BUGFIX_SUMMARY.md       # 🐛 Bug修复总结
+└── logs/                   # 📝 日志目录
 ```
