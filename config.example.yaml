@@ -28,14 +28,6 @@ genshin:
     #   type: click
     #   text: "自定义按钮"
 
-# 绝区零配置（单应用模式，游戏内自动化）
-zzz:
-  enabled: true                  # 是否启用绝区零自动化
-  game_name: "绝区零"
-  window_title: "绝区零"         # 游戏窗口标题
-  game_path: "C:\\Program Files\\ZenlessZoneZero\\ZenlessZoneZero.exe"  # 游戏启动路径
-  auto_launch: true              # 是否自动启动游戏
-
 # 绝区零配置（多应用模式，游戏本体+zzz-onedragen辅助）
 zzz_multi_app:
   enabled: true                  # 是否启用多应用模式
