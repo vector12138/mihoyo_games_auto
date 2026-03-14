@@ -1,4 +1,4 @@
 from .genshin import GenshinImpact
-from .zzz import ZenlessZoneZero
+from .zzz import ZenlessZoneZero, ZZZMultiApp
 
-__all__ = ['GenshinImpact', 'ZenlessZoneZero']
+__all__ = ['GenshinImpact', 'ZenlessZoneZero', 'ZZZMultiApp']
