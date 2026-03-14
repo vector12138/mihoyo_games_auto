@@ -6,9 +6,9 @@ Telegram通知模块
 
 import requests
 import yaml
-import logging
 from pathlib import Path
 from datetime import datetime
+from loguru import logger
 
 class TelegramNotifier:
     """Telegram通知器"""
@@ -20,12 +20,10 @@ class TelegramNotifier:
         self.chat_id = self.config.get('chat_id', '')
         self.enabled = self.config.get('enabled', False) and self.bot_token and self.chat_id
         
-        self.logger = logging.getLogger('TelegramNotifier')
-        
         if self.enabled:
-            self.logger.info(f"Telegram通知已启用，Chat ID: {self.chat_id}")
+            logger.info(f"Telegram通知已启用，Chat ID: {self.chat_id}")
         else:
-            self.logger.warning("Telegram通知未启用，请检查配置")
+            logger.warning("Telegram通知未启用，请检查配置")
     
     def send_message(self, text, parse_mode='Markdown', disable_notification=False):
         """
@@ -36,7 +34,7 @@ class TelegramNotifier:
         :return: 是否成功
         """
         if not self.enabled:
-            self.logger.debug("Telegram通知未启用，跳过发送")
+            logger.debug("Telegram通知未启用，跳过发送")
             return False
         
         try:
@@ -52,14 +50,14 @@ class TelegramNotifier:
             response = requests.post(url, json=payload, timeout=10)
             response.raise_for_status()
             
-            self.logger.info(f"Telegram消息发送成功: {text[:50]}...")
+            logger.info(f"Telegram消息发送成功: {text[:50]}...")
             return True
             
         except requests.exceptions.RequestException as e:
-            self.logger.error(f"发送Telegram消息失败: {e}")
+            logger.error(f"发送Telegram消息失败: {e}")
             return False
         except Exception as e:
-            self.logger.error(f"Telegram消息异常: {e}")
+            logger.error(f"Telegram消息异常: {e}")
             return False
     
     def send_photo(self, photo_path, caption='', disable_notification=False):
@@ -71,11 +69,11 @@ class TelegramNotifier:
         :return: 是否成功
         """
         if not self.enabled:
-            self.logger.debug("Telegram通知未启用，跳过发送")
+            logger.debug("Telegram通知未启用，跳过发送")
             return False
         
         if not Path(photo_path).exists():
-            self.logger.error(f"图片不存在: {photo_path}")
+            logger.error(f"图片不存在: {photo_path}")
             return False
         
         try:
@@ -92,14 +90,14 @@ class TelegramNotifier:
                 response = requests.post(url, files=files, data=data, timeout=30)
                 response.raise_for_status()
             
-            self.logger.info(f"Telegram图片发送成功: {photo_path}")
+            logger.info(f"Telegram图片发送成功: {photo_path}")
             return True
             
         except requests.exceptions.RequestException as e:
-            self.logger.error(f"发送Telegram图片失败: {e}")
+            logger.error(f"发送Telegram图片失败: {e}")
             return False
         except Exception as e:
-            self.logger.error(f"Telegram图片异常: {e}")
+            logger.error(f"Telegram图片异常: {e}")
             return False
     
     def notify_task_start(self, task_name):

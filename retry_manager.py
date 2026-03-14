@@ -5,9 +5,9 @@
 """
 
 import time
-import logging
 from functools import wraps
 from typing import Callable, Any, Optional
+from loguru import logger
 
 class RetryManager:
     """重试管理器"""
@@ -27,12 +27,10 @@ class RetryManager:
         self.retry_on_network_error = self.config.get('retry_on_network_error', True)
         self.retry_on_game_error = self.config.get('retry_on_game_error', True)
         
-        self.logger = logging.getLogger('RetryManager')
-        
         if self.enabled:
-            self.logger.info(f"重试机制已启用，最大尝试次数: {self.max_attempts}")
+            logger.info(f"重试机制已启用，最大尝试次数: {self.max_attempts}")
         else:
-            self.logger.info("重试机制未启用")
+            logger.info("重试机制未启用")
     
     def should_retry(self, error: Exception, attempt: int) -> bool:
         """
@@ -45,7 +43,7 @@ class RetryManager:
             return False
         
         if attempt >= self.max_attempts:
-            self.logger.debug(f"达到最大尝试次数: {attempt}/{self.max_attempts}")
+            logger.debug(f"达到最大尝试次数: {attempt}/{self.max_attempts}")
             return False
         
         error_str = str(error).lower()
@@ -90,26 +88,26 @@ class RetryManager:
         
         for attempt in range(1, self.max_attempts + 1):
             try:
-                self.logger.debug(f"尝试执行函数: {func.__name__}, 尝试次数: {attempt}/{self.max_attempts}")
+                logger.debug(f"尝试执行函数: {func.__name__}, 尝试次数: {attempt}/{self.max_attempts}")
                 return func(*args, **kwargs)
                 
             except Exception as e:
                 last_error = e
-                self.logger.warning(f"函数执行失败: {func.__name__}, 尝试次数: {attempt}, 错误: {e}")
+                logger.warning(f"函数执行失败: {func.__name__}, 尝试次数: {attempt}, 错误: {e}")
                 
                 # 检查是否应该重试
                 if not self.should_retry(e, attempt):
-                    self.logger.error(f"不再重试: {func.__name__}")
+                    logger.error(f"不再重试: {func.__name__}")
                     raise
                 
                 # 计算并等待延迟
                 if attempt < self.max_attempts:
                     delay = self.calculate_delay(attempt)
-                    self.logger.info(f"等待 {delay:.1f} 秒后重试 ({attempt}/{self.max_attempts})...")
+                    logger.info(f"等待 {delay:.1f} 秒后重试 ({attempt}/{self.max_attempts})...")
                     time.sleep(delay)
         
         # 所有尝试都失败
-        self.logger.error(f"函数执行完全失败: {func.__name__}, 尝试次数: {self.max_attempts}")
+        logger.error(f"函数执行完全失败: {func.__name__}, 尝试次数: {self.max_attempts}")
         raise last_error
     
     def retry_decorator(self, max_attempts: Optional[int] = None, 

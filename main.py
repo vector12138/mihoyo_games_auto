@@ -7,14 +7,15 @@ import os
 import sys
 import time
 from loguru import logger
+from logging_config import setup_logging
 from config import Config
 from games.genshin import GenshinImpact
 from games.zzz import ZenlessZoneZero, ZZZMultiApp
 from telegram_notifier import TelegramNotifier
-from shutdown import ShutdownManager
+from shutdown import shutdown
 
 # 配置日志
-logger.add("logs/automation_{time}.log", rotation="10MB", retention="7 days", level="INFO")
+setup_logging()
 
 
 def main():
@@ -112,7 +113,7 @@ def main():
         logger.info("任务完成，即将自动关机")
         if notifier:
             notifier.send_message("🔌 任务完成，即将自动关机")
-        ShutdownManager.shutdown(delay=60)
+        shutdown(delay=60)
 
 
 if __name__ == "__main__":

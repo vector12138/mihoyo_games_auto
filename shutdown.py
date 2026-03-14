@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-关机脚本
-安全关闭电脑
+关机模块
+提供安全关机功能，支持延迟关机和强制关机
 """
 
 import os
@@ -11,6 +11,7 @@ import yaml
 import subprocess
 import platform
 from pathlib import Path
+from loguru import logger
 
 def load_config():
     """加载配置文件"""
@@ -22,7 +23,7 @@ def load_config():
         with open(config_path, 'r', encoding='utf-8') as f:
             return yaml.safe_load(f)
     except Exception as e:
-        print(f"❌ 加载配置文件失败: {e}")
+        logger.error(f"加载配置文件失败: {e}")
         return None
 
 def check_running_processes():
@@ -77,7 +78,7 @@ def check_running_processes():
                         break
     
     except Exception as e:
-        print(f"⚠️  检查进程异常: {e}")
+        logger.warning(f"检查进程异常: {e}")
     
     return running_processes
 
@@ -88,14 +89,14 @@ def kill_processes(processes):
     :return: 是否成功结束所有进程
     """
     if not processes:
-        print("✅ 没有需要结束的进程")
+        logger.info("没有需要结束的进程")
         return True
     
     system = platform.system().lower()
     all_success = True
     
     for process_name, pid in processes:
-        print(f"🛑 结束进程: {process_name} (PID: {pid})")
+        logger.info(f"结束进程: {process_name} (PID: {pid})")
         
         try:
             if system == 'windows':
@@ -110,56 +111,49 @@ def kill_processes(processes):
                 # 使用pkill结束进程
                 subprocess.run(['pkill', '-f', process_name], check=True)
             
-            print(f"✅ 进程已结束: {process_name}")
+            logger.info(f"进程已结束: {process_name}")
             time.sleep(1)  # 短暂等待
             
         except subprocess.CalledProcessError:
-            print(f"⚠️  无法结束进程: {process_name}，可能已退出")
+            logger.warning(f"无法结束进程: {process_name}，可能已退出")
         except Exception as e:
-            print(f"❌ 结束进程异常: {process_name} - {e}")
+            logger.error(f"结束进程异常: {process_name} - {e}")
             all_success = False
     
     return all_success
 
-def graceful_shutdown(config):
+def graceful_shutdown(config, force=False):
     """
     优雅关机
     :param config: 配置字典
+    :param force: 是否强制关机
     :return: 是否成功
     """
     shutdown_config = config.get('shutdown', {})
-    force = shutdown_config.get('force_shutdown', False)
-    timeout = shutdown_config.get('timeout_seconds', 60)
+    force = force or shutdown_config.get('force_shutdown', False)
     
-    print("🔌 准备关机...")
+    logger.info("准备关机...")
     
     # 1. 检查并结束游戏进程
-    print("\n1. 检查运行中的进程...")
+    logger.info("检查运行中的进程...")
     running_processes = check_running_processes()
     
     if running_processes:
-        print(f"发现 {len(running_processes)} 个运行中的进程:")
+        logger.info(f"发现 {len(running_processes)} 个运行中的进程")
         for proc, pid in running_processes:
-            print(f"  - {proc} (PID: {pid})")
-        
-        if not force:
-            print("\n⚠️  有关闭中的进程，建议先手动保存")
-            user_input = input("是否继续关机？(y/N): ")
-            if user_input.lower() != 'y':
-                print("❌ 用户取消关机")
-                return False
+            logger.info(f"  - {proc} (PID: {pid})")
         
         # 结束进程
-        print("\n2. 结束进程...")
+        logger.info("结束进程...")
         if not kill_processes(running_processes):
             if not force:
-                print("❌ 无法结束所有进程，取消关机")
+                logger.error("无法结束所有进程，取消关机")
                 return False
             else:
-                print("⚠️  强制关机，忽略进程结束失败")
+                logger.warning("强制关机，忽略进程结束失败")
     
     # 2. 执行关机命令
-    print("\n3. 执行关机...")
+    logger.info("执行关机...")
     system = platform.system().lower()
     
     try:
@@ -181,42 +175,72 @@ def graceful_shutdown(config):
             command = 'sudo shutdown -h now'
         
         else:
-            print(f"❌ 不支持的操作系统: {system}")
+            logger.error(f"不支持的操作系统: {system}")
             return False
         
-        print(f"执行命令: {command}")
+        logger.info(f"执行命令: {command}")
         
         if system == 'darwin':
             # macOS需要sudo权限
-            print("⚠️  macOS关机需要sudo权限，请输入密码:")
+            logger.warning("macOS关机需要sudo权限，请输入密码:")
         
         subprocess.run(command, shell=True, check=True)
         
-        print("✅ 关机命令已执行")
+        logger.info("关机命令已执行")
         return True
         
     except subprocess.CalledProcessError as e:
-        print(f"❌ 关机命令执行失败: {e}")
+        logger.error(f"关机命令执行失败: {e}")
         return False
     except Exception as e:
-        print(f"❌ 关机异常: {e}")
+        logger.error(f"关机异常: {e}")
         return False
 
-def main():
-    """主函数"""
-    print("=" * 50)
-    print("米哈游游戏自动化 - 关机脚本")
-    print("=" * 50)
+def shutdown(delay: int = 60, force: bool = False):
+    """
+    执行关机操作
+    :param delay: 延迟时间（秒）
+    :param force: 是否强制关机
+    :return: 是否成功
+    """
+    logger.info(f"准备关机，延迟 {delay} 秒，强制模式: {force}")
     
     # 加载配置
     config = load_config()
     if not config:
-        print("❌ 无法加载配置，请检查配置文件")
+        logger.error("无法加载配置，关机失败")
+        return False
+    
+    # 如果有延迟，等待
+    if delay > 0:
+        logger.info(f"等待 {delay} 秒后关机...")
+        time.sleep(delay)
+    
+    # 执行关机
+    success = graceful_shutdown(config, force)
+    
+    if success:
+        logger.info("关机命令已执行")
+    else:
+        logger.error("关机失败")
+    
+    return success
+
+def main():
+    """命令行主函数"""
+    logger.info("=" * 50)
+    logger.info("米哈游游戏自动化 - 关机脚本")
+    logger.info("=" * 50)
+    
+    # 加载配置
+    config = load_config()
+    if not config:
+        logger.error("无法加载配置，请检查配置文件")
         return False
     
     # 确认关机
-    print("\n⚠️  警告：此操作将关闭电脑")
-    print("请确保所有重要工作已保存")
+    logger.warning("警告：此操作将关闭电脑")
+    logger.info("请确保所有重要工作已保存")
     
     # 检查是否有其他参数（如--force）
     force_shutdown = '--force' in sys.argv or '-f' in sys.argv
@@ -224,58 +248,19 @@ def main():
     if not force_shutdown:
         user_input = input("\n确认关机？(y/N): ")
         if user_input.lower() != 'y':
-            print("❌ 用户取消关机")
+            logger.info("用户取消关机")
             return False
     
     # 执行关机
-    success = graceful_shutdown(config)
+    success = graceful_shutdown(config, force_shutdown)
     
     if success:
-        print("\n✅ 电脑将在短时间内关闭")
-        print("💤 再见！")
+        logger.info("电脑将在短时间内关闭")
+        logger.info("再见！")
     else:
-        print("\n❌ 关机失败，请手动检查")
+        logger.error("关机失败，请手动检查")
     
     return success
-
-class ShutdownManager:
-    """关机管理器类"""
-    
-    @staticmethod
-    def shutdown(delay: int = 60, force: bool = False):
-        """
-        执行关机操作
-        :param delay: 延迟时间（秒）
-        :param force: 是否强制关机
-        :return: 是否成功
-        """
-        print(f"[ShutdownManager] 准备关机，延迟 {delay} 秒，强制模式: {force}")
-        
-        # 加载配置
-        config = load_config()
-        if not config:
-            print("[ShutdownManager] 错误: 无法加载配置，关机失败")
-            return False
-        
-        # 如果有延迟，等待
-        if delay > 0:
-            print(f"[ShutdownManager] 等待 {delay} 秒后关机...")
-            time.sleep(delay)
-        
-        # 设置强制关机标志
-        if force:
-            config['shutdown'] = config.get('shutdown', {})
-            config['shutdown']['force_shutdown'] = True
-        
-        # 执行关机
-        success = graceful_shutdown(config)
-        
-        if success:
-            print("[ShutdownManager] 关机命令已执行")
-        else:
-            print("[ShutdownManager] 关机失败")
-        
-        return success
 
 
 if __name__ == '__main__':
