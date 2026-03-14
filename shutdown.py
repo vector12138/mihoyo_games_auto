@@ -238,6 +238,46 @@ def main():
     
     return success
 
+class ShutdownManager:
+    """关机管理器类"""
+    
+    @staticmethod
+    def shutdown(delay: int = 60, force: bool = False):
+        """
+        执行关机操作
+        :param delay: 延迟时间（秒）
+        :param force: 是否强制关机
+        :return: 是否成功
+        """
+        print(f"[ShutdownManager] 准备关机，延迟 {delay} 秒，强制模式: {force}")
+        
+        # 加载配置
+        config = load_config()
+        if not config:
+            print("[ShutdownManager] 错误: 无法加载配置，关机失败")
+            return False
+        
+        # 如果有延迟，等待
+        if delay > 0:
+            print(f"[ShutdownManager] 等待 {delay} 秒后关机...")
+            time.sleep(delay)
+        
+        # 设置强制关机标志
+        if force:
+            config['shutdown'] = config.get('shutdown', {})
+            config['shutdown']['force_shutdown'] = True
+        
+        # 执行关机
+        success = graceful_shutdown(config)
+        
+        if success:
+            print("[ShutdownManager] 关机命令已执行")
+        else:
+            print("[ShutdownManager] 关机失败")
+        
+        return success
+
+
 if __name__ == '__main__':
     success = main()
     sys.exit(0 if success else 1)
