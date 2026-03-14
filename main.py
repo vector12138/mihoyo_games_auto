@@ -42,11 +42,13 @@ def main():
     # 初始化通知器
     notifier = None
     if config.get("global.telegram_notify"):
-        notifier = TelegramNotifier(
-            token=config.get("global.telegram_token"),
-            chat_id=config.get("global.telegram_chat_id")
-        )
-        notifier.send_msg("🎮 游戏自动化任务开始执行")
+        telegram_config = {
+            'bot_token': config.get("global.telegram_token"),
+            'chat_id': config.get("global.telegram_chat_id"),
+            'enabled': True
+        }
+        notifier = TelegramNotifier(telegram_config)
+        notifier.send_message("🎮 游戏自动化任务开始执行")
     
     # 需要执行的游戏列表
     games_to_run = []
@@ -64,7 +66,7 @@ def main():
     if not games_to_run:
         logger.warning("没有启用任何游戏自动化任务")
         if notifier:
-            notifier.send_msg("⚠️ 没有启用任何游戏自动化任务")
+            notifier.send_message("⚠️ 没有启用任何游戏自动化任务")
         return
     
     # 执行每个游戏的自动化
@@ -81,7 +83,7 @@ def main():
                 if not launch_game(game_config):
                     logger.error(f"{game_name}启动失败，跳过此游戏")
                     if notifier:
-                        notifier.send_msg(f"❌ {game_name}启动失败，跳过此游戏")
+                        notifier.send_message(f"❌ {game_name}启动失败，跳过此游戏")
                     continue
                 # 等待游戏启动
                 time.sleep(30)
@@ -95,28 +97,28 @@ def main():
                 success_count += 1
                 logger.info(f"{game_name}任务执行成功")
                 if notifier:
-                    notifier.send_msg(f"✅ {game_name}任务执行成功")
+                    notifier.send_message(f"✅ {game_name}任务执行成功")
             else:
                 logger.error(f"{game_name}任务执行失败")
                 if notifier:
-                    notifier.send_msg(f"❌ {game_name}任务执行失败")
+                    notifier.send_message(f"❌ {game_name}任务执行失败")
         
         except Exception as e:
             logger.error(f"{game_name}任务执行出错: {str(e)}")
             if notifier:
-                notifier.send_msg(f"❌ {game_name}任务执行出错: {str(e)}")
+                notifier.send_message(f"❌ {game_name}任务执行出错: {str(e)}")
     
     # 任务完成
     logger.info(f"=== 所有任务执行完成 成功: {success_count}/{total_count}")
     
     if notifier:
-        notifier.send_msg(f"🎮 所有任务执行完成 成功: {success_count}/{total_count}")
+        notifier.send_message(f"🎮 所有任务执行完成 成功: {success_count}/{total_count}")
     
     # 自动关机
     if config.get("global.auto_shutdown"):
         logger.info("任务完成，即将自动关机")
         if notifier:
-            notifier.send_msg("🔌 任务完成，即将自动关机")
+            notifier.send_message("🔌 任务完成，即将自动关机")
         ShutdownManager.shutdown(delay=60)
 
 

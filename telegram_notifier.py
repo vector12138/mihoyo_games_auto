@@ -5,7 +5,7 @@ Telegram通知模块
 """
 
 import requests
-import json
+import yaml
 import logging
 from pathlib import Path
 from datetime import datetime
@@ -160,13 +160,13 @@ class TelegramNotifier:
 
 def load_config():
     """加载配置文件"""
-    config_path = Path(__file__).parent / 'config.json'
+    config_path = Path(__file__).parent / 'config.yaml'
     if not config_path.exists():
-        config_path = Path(__file__).parent / 'config.example.json'
+        config_path = Path(__file__).parent / 'config.example.yaml'
     
     try:
         with open(config_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            return yaml.safe_load(f)
     except Exception as e:
         print(f"❌ 加载配置文件失败: {e}")
         return None
