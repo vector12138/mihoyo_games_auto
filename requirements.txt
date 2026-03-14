@@ -3,6 +3,7 @@ paddleocr>=2.7.3
 shapely>=2.0.0
 pyclipper>=1.3.0
 pywin32>=306  # 包含win32gui、win32ui等Windows API模块
+pyautogui>=0.9.54  # 自动点击、键盘输入
 pynput>=1.7.6
 opencv-python>=4.8.0
 pillow>=10.0.0
