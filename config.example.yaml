@@ -9,6 +9,14 @@ global:
   telegram_token: ""             # Telegram Bot Token
   telegram_chat_id: ""           # Telegram 聊天ID
 
+# Telegram代理配置（可选）
+telegram_proxy:
+  enabled: false                 # 是否启用代理
+  url: "http://127.0.0.1:1080"  # 代理服务器地址，支持http/socks5
+  auth:                          # 代理认证（如果需要）
+    username: ""
+    password: ""
+
 # 游戏通用配置
 game_common:
   window_mode: fullscreen        # 窗口模式：fullscreen/windowed

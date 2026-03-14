@@ -34,7 +34,15 @@ def main():
         telegram_config = {
             'bot_token': config.get("global.telegram_token"),
             'chat_id': config.get("global.telegram_chat_id"),
-            'enabled': True
+            'enabled': True,
+            'proxy': {
+                'enabled': config.get("telegram_proxy.enabled", False),
+                'url': config.get("telegram_proxy.url", ""),
+                'auth': {
+                    'username': config.get("telegram_proxy.auth.username", ""),
+                    'password': config.get("telegram_proxy.auth.password", "")
+                }
+            }
         }
         notifier = TelegramNotifier(telegram_config)
         notifier.send_message("🎮 游戏自动化任务开始执行")

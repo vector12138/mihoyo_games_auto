@@ -2,16 +2,18 @@
 """
 Telegram通知模块
 发送任务状态通知到Telegram
+支持代理配置
 """
 
 import requests
 import yaml
 from pathlib import Path
 from datetime import datetime
+from typing import Dict, Optional
 from loguru import logger
 
 class TelegramNotifier:
-    """Telegram通知器"""
+    """Telegram通知器，支持代理"""
     
     def __init__(self, config=None):
         """初始化通知器"""
@@ -20,10 +22,51 @@ class TelegramNotifier:
         self.chat_id = self.config.get('chat_id', '')
         self.enabled = self.config.get('enabled', False) and self.bot_token and self.chat_id
         
+        # 代理配置
+        self.proxy_config = self.config.get('proxy', {})
+        self.proxy_enabled = self.proxy_config.get('enabled', False)
+        self.proxy_url = self.proxy_config.get('url', '')
+        self.proxy_auth = self.proxy_config.get('auth', {})
+        
+        # 创建会话
+        self.session = self._create_session()
+        
         if self.enabled:
-            logger.info(f"Telegram通知已启用，Chat ID: {self.chat_id}")
+            proxy_info = "（使用代理）" if self.proxy_enabled else ""
+            logger.info(f"Telegram通知已启用{proxy_info}，Chat ID: {self.chat_id}")
         else:
             logger.warning("Telegram通知未启用，请检查配置")
+    
+    def _create_session(self):
+        """创建HTTP会话，配置代理"""
+        session = requests.Session()
+        
+        if self.proxy_enabled and self.proxy_url:
+            try:
+                proxies = {
+                    'http': self.proxy_url,
+                    'https': self.proxy_url
+                }
+                
+                # 配置代理认证
+                if self.proxy_auth:
+                    username = self.proxy_auth.get('username')
+                    password = self.proxy_auth.get('password')
+                    if username and password:
+                        from requests.auth import HTTPProxyAuth
+                        session.proxies = proxies
+                        session.auth = HTTPProxyAuth(username, password)
+                    else:
+                        session.proxies = proxies
+                
+                logger.debug(f"已配置代理: {self.proxy_url}")
+            except Exception as e:
+                logger.error(f"配置代理失败: {e}")
+        
+        # 设置默认超时
+        session.timeout = 10
+        
+        return session
     
     def send_message(self, text, parse_mode='Markdown', disable_notification=False):
         """
@@ -47,7 +90,7 @@ class TelegramNotifier:
                 'disable_notification': disable_notification
             }
             
-            response = requests.post(url, json=payload, timeout=10)
+            response = self.session.post(url, json=payload, timeout=10)
             response.raise_for_status()
             
             logger.info(f"Telegram消息发送成功: {text[:50]}...")
@@ -87,7 +130,7 @@ class TelegramNotifier:
                     'disable_notification': disable_notification
                 }
                 
-                response = requests.post(url, files=files, data=data, timeout=30)
+                response = self.session.post(url, files=files, data=data, timeout=30)
                 response.raise_for_status()
             
             logger.info(f"Telegram图片发送成功: {photo_path}")
@@ -130,6 +173,43 @@ class TelegramNotifier:
         text = f"📊 *系统状态*\n\n*状态*: {status}\n*详情*: {details}\n*时间*: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         return self.send_message(text)
     
+    def test_connection(self):
+        """
+        测试Telegram连接（包括代理）
+        :return: 是否连接成功
+        """
+        if not self.enabled:
+            logger.warning("Telegram通知未启用，无法测试连接")
+            return False
+        
+        try:
+            # 使用getMe方法测试连接
+            url = f"https://api.telegram.org/bot{self.bot_token}/getMe"
+            response = self.session.get(url, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            if data.get('ok'):
+                bot_info = data.get('result', {})
+                username = bot_info.get('username', '未知')
+                logger.info(f"Telegram连接测试成功，Bot: @{username}")
+                
+                # 测试代理连接
+                if self.proxy_enabled:
+                    logger.info(f"代理配置: {self.proxy_url}")
+                
+                return True
+            else:
+                logger.error(f"Telegram API返回错误: {data}")
+                return False
+                
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Telegram连接测试失败: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"连接测试异常: {e}")
+            return False
+    
     def notify_daily_report(self, report_data):
         """发送每日报告"""
         if not report_data:
@@ -171,28 +251,34 @@ def load_config():
 
 def test_notifier():
     """测试通知功能"""
-    print("测试Telegram通知功能...")
+    logger.info("测试Telegram通知功能...")
     
     config = load_config()
     if not config:
-        print("❌ 无法加载配置")
+        logger.error("❌ 无法加载配置")
         return False
     
     telegram_config = config.get('telegram', {})
     notifier = TelegramNotifier(telegram_config)
     
     if not notifier.enabled:
-        print("❌ Telegram通知未启用，请检查配置")
+        logger.error("❌ Telegram通知未启用，请检查配置")
+        return False
+    
+    # 测试连接
+    logger.info("测试Telegram连接...")
+    if not notifier.test_connection():
+        logger.error("❌ Telegram连接测试失败")
         return False
     
     # 测试消息
-    print("发送测试消息...")
+    logger.info("发送测试消息...")
     success = notifier.send_message("🔧 *测试消息*\n\n这是米哈游游戏自动化的测试通知。\n*时间*: " + datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     
     if success:
-        print("✅ 测试消息发送成功")
+        logger.info("✅ 测试消息发送成功")
     else:
-        print("❌ 测试消息发送失败")
+        logger.error("❌ 测试消息发送失败")
     
     return success
 
