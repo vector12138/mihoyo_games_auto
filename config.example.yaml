@@ -1,0 +1,35 @@
+# 全局配置
+global:
+  use_gpu: true                  # 是否使用GPU加速OCR
+  max_retries: 3                 # 失败重试次数
+  retry_delay: 1                 # 重试间隔（秒）
+  click_delay: 0.2               # 点击后延迟（秒）
+  auto_shutdown: false           # 任务完成后自动关机
+  telegram_notify: false         # 是否开启Telegram通知
+  telegram_token: ""             # Telegram Bot Token
+  telegram_chat_id: ""           # Telegram 聊天ID
+
+# 游戏通用配置
+game_common:
+  window_mode: fullscreen        # 窗口模式：fullscreen/windowed
+  resolution: "1920x1080"        # 游戏分辨率，推荐1920x1080
+
+# 原神配置
+genshin:
+  enabled: true                  # 是否启用原神自动化
+  game_name: "原神"
+  window_title: "原神"           # 游戏窗口标题
+  game_path: "C:\\Program Files\\Genshin Impact\\GenshinImpact.exe"  # 游戏启动路径
+  auto_launch: true              # 是否自动启动游戏
+  steps:                         # 自定义步骤，会覆盖默认步骤
+    # - name: 自定义步骤
+    #   type: click
+    #   text: "自定义按钮"
+
+# 绝区零配置
+zzz:
+  enabled: true                  # 是否启用绝区零自动化
+  game_name: "绝区零"
+  window_title: "绝区零"         # 游戏窗口标题
+  game_path: "C:\\Program Files\\ZenlessZoneZero\\ZenlessZoneZero.exe"  # 游戏启动路径
+  auto_launch: true              # 是否自动启动游戏
