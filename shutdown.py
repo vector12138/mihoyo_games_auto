@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-关机模块
+关机模块 - Windows专用
 提供安全关机功能，支持延迟关机和强制关机
+注意：本项目仅支持Windows系统
 """
 
 import os
@@ -28,10 +29,14 @@ def load_config():
 
 def check_running_processes():
     """
-    检查是否有重要进程在运行
+    检查是否有重要进程在运行（Windows专用）
     返回需要关闭的进程列表
     """
     system = platform.system().lower()
+    
+    if system != 'windows':
+        logger.error(f"不支持的操作系统: {system}，本项目仅支持Windows")
+        return []
     
     # 需要检查的进程（游戏相关）
     game_processes = [
@@ -45,37 +50,22 @@ def check_running_processes():
     running_processes = []
     
     try:
-        if system == 'windows':
-            # Windows: 使用tasklist命令
-            result = subprocess.run(
-                ['tasklist', '/FO', 'CSV'],
-                capture_output=True,
-                text=True,
-                encoding='utf-8'
-            )
-            
-            for line in result.stdout.split('\n'):
-                if ',' in line:
-                    parts = line.strip('"').split('","')
-                    if len(parts) >= 1:
-                        process_name = parts[0].strip('"')
-                        if process_name in game_processes:
-                            pid = parts[1].strip('"') if len(parts) > 1 else 'N/A'
-                            running_processes.append((process_name, pid))
+        # Windows: 使用tasklist命令
+        result = subprocess.run(
+            ['tasklist', '/FO', 'CSV'],
+            capture_output=True,
+            text=True,
+            encoding='utf-8'
+        )
         
-        elif system in ['linux', 'darwin']:  # Linux或macOS
-            # 使用ps命令
-            result = subprocess.run(
-                ['ps', 'aux'],
-                capture_output=True,
-                text=True
-            )
-            
-            for line in result.stdout.split('\n'):
-                for process in game_processes:
-                    if process in line:
-                        running_processes.append((process, 'N/A'))
-                        break
+        for line in result.stdout.split('\n'):
+            if ',' in line:
+                parts = line.strip('"').split('","')
+                if len(parts) >= 1:
+                    process_name = parts[0].strip('"')
+                    if process_name in game_processes:
+                        pid = parts[1].strip('"') if len(parts) > 1 else 'N/A'
+                        running_processes.append((process_name, pid))
     
     except Exception as e:
         logger.warning(f"检查进程异常: {e}")
@@ -84,7 +74,7 @@ def check_running_processes():
 
 def kill_processes(processes):
     """
-    结束指定进程
+    结束指定进程（Windows专用）
     :param processes: 进程列表，每个元素为(进程名, PID)
     :return: 是否成功结束所有进程
     """
@@ -93,23 +83,23 @@ def kill_processes(processes):
         return True
     
     system = platform.system().lower()
+    
+    if system != 'windows':
+        logger.error(f"不支持的操作系统: {system}，无法结束进程")
+        return False
+    
     all_success = True
     
     for process_name, pid in processes:
         logger.info(f"结束进程: {process_name} (PID: {pid})")
         
         try:
-            if system == 'windows':
-                if pid != 'N/A':
-                    # 使用taskkill结束进程
-                    subprocess.run(['taskkill', '/PID', pid, '/F'], check=True)
-                else:
-                    # 使用进程名结束
-                    subprocess.run(['taskkill', '/IM', process_name, '/F'], check=True)
-            
-            elif system in ['linux', 'darwin']:
-                # 使用pkill结束进程
-                subprocess.run(['pkill', '-f', process_name], check=True)
+            if pid != 'N/A':
+                # 使用taskkill结束进程
+                subprocess.run(['taskkill', '/PID', pid, '/F'], check=True)
+            else:
+                # 使用进程名结束
+                subprocess.run(['taskkill', '/IM', process_name, '/F'], check=True)
             
             logger.info(f"进程已结束: {process_name}")
             time.sleep(1)  # 短暂等待
@@ -124,7 +114,7 @@ def kill_processes(processes):
 
 def graceful_shutdown(config, force=False):
     """
-    优雅关机
+    优雅关机（Windows专用）
     :param config: 配置字典
     :param force: 是否强制关机
     :return: 是否成功
@@ -133,6 +123,12 @@ def graceful_shutdown(config, force=False):
     force = force or shutdown_config.get('force_shutdown', False)
     
     logger.info("准备关机...")
+    
+    # 检查操作系统
+    system = platform.system().lower()
+    if system != 'windows':
+        logger.error(f"不支持的操作系统: {system}，本项目仅支持Windows")
+        return False
     
     # 1. 检查并结束游戏进程
     logger.info("检查运行中的进程...")
@@ -154,36 +150,16 @@ def graceful_shutdown(config, force=False):
     
     # 2. 执行关机命令
     logger.info("执行关机...")
-    system = platform.system().lower()
     
     try:
-        if system == 'windows':
-            # Windows关机命令
-            # /s: 关机
-            # /f: 强制关闭应用程序
-            # /t 0: 立即执行
-            force_flag = '/f' if force else ''
-            command = f'shutdown /s {force_flag} /t 0'
-            
-        elif system == 'linux':
-            # Linux关机命令
-            force_flag = '-f' if force else ''
-            command = f'shutdown -h now {force_flag}'
-            
-        elif system == 'darwin':
-            # macOS关机命令
-            command = 'sudo shutdown -h now'
-        
-        else:
-            logger.error(f"不支持的操作系统: {system}")
-            return False
+        # Windows关机命令
+        # /s: 关机
+        # /f: 强制关闭应用程序
+        # /t 0: 立即执行
+        force_flag = '/f' if force else ''
+        command = f'shutdown /s {force_flag} /t 0'
         
         logger.info(f"执行命令: {command}")
-        
-        if system == 'darwin':
-            # macOS需要sudo权限
-            logger.warning("macOS关机需要sudo权限，请输入密码:")
-        
         subprocess.run(command, shell=True, check=True)
         
         logger.info("关机命令已执行")
@@ -198,12 +174,18 @@ def graceful_shutdown(config, force=False):
 
 def shutdown(delay: int = 60, force: bool = False):
     """
-    执行关机操作
+    执行关机操作（Windows专用）
     :param delay: 延迟时间（秒）
     :param force: 是否强制关机
     :return: 是否成功
     """
     logger.info(f"准备关机，延迟 {delay} 秒，强制模式: {force}")
+    
+    # 检查操作系统
+    system = platform.system().lower()
+    if system != 'windows':
+        logger.error(f"不支持的操作系统: {system}，本项目仅支持Windows")
+        return False
     
     # 加载配置
     config = load_config()
@@ -229,8 +211,15 @@ def shutdown(delay: int = 60, force: bool = False):
 def main():
     """命令行主函数"""
     logger.info("=" * 50)
-    logger.info("米哈游游戏自动化 - 关机脚本")
+    logger.info("米哈游游戏自动化 - 关机脚本 (Windows专用)")
     logger.info("=" * 50)
+    
+    # 检查操作系统
+    system = platform.system().lower()
+    if system != 'windows':
+        logger.error(f"错误：不支持的操作系统: {system}")
+        logger.error("本项目仅支持Windows系统")
+        return False
     
     # 加载配置
     config = load_config()

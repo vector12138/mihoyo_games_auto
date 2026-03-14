@@ -63,7 +63,7 @@ telegram_proxy:
 **A**: Telegram 具有以下优势：
 - 免费且无消息数量限制
 - 支持完善的 Bot API
-- 跨平台支持良好
+- Windows专用，不跨平台
 - 代理配置简单
 - 消息推送及时
 
