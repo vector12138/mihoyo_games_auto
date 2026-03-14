@@ -26,11 +26,11 @@ class GameBase:
         # 初始化核心组件
         self.screen_capture = ScreenCapture(self.window_title)
         self.ocr = OCRRecognizer(use_gpu=config.get('use_gpu', True))
-        self.input = InputController(
+        self.input_controller = InputController(
             click_delay=config.get('click_delay', 0.2),
             type_delay=config.get('type_delay', 0.05)
         )
-        self.retry = RetryManager(
+        self.retry_manager = RetryManager(
             max_retries=config.get('max_retries', 3),
             retry_delay=config.get('retry_delay', 1)
         )
@@ -38,7 +38,7 @@ class GameBase:
         # 游戏按钮配置，子类需要覆盖
         self.buttons: Dict[str, str] = {}
         # 游戏操作步骤，子类需要覆盖
-        self.steps: List[Dict] = []
+        self.task_steps: List[Dict] = []
         
         logger.info(f"初始化游戏: {self.game_name}")
     
@@ -85,7 +85,7 @@ class GameBase:
             x += left
             y += top
         
-        self.input.click(int(x), int(y), double=double)
+        self.input_controller.click(int(x), int(y), double=double)
         logger.info(f"点击文本成功: {target_text} 位置: ({int(x)}, {int(y)})")
         return True
     
@@ -121,10 +121,10 @@ class GameBase:
                 time.sleep(step.get('seconds', 1))
                 return True
             elif step_type == 'press':
-                self.input.press_key(step['key'])
+                self.input_controller.press_key(step['key'])
                 return True
             elif step_type == 'hotkey':
-                self.input.hotkey(*step['keys'])
+                self.input_controller.hotkey(*step['keys'])
                 return True
             elif step_type == 'custom':
                 func = getattr(self, step['func'])
@@ -140,11 +140,11 @@ class GameBase:
         """执行所有操作步骤"""
         logger.info(f"开始执行{self.game_name}自动化任务")
         success_count = 0
-        total_steps = len(self.steps)
+        total_steps = len(self.task_steps)
         
-        for i, step in enumerate(self.steps, 1):
+        for i, step in enumerate(self.task_steps, 1):
             logger.info(f"步骤 [{i}/{total_steps}]")
-            result = self.retry.run(lambda: self.execute_step(step))
+            result = self.retry_manager.run(lambda: self.execute_step(step))
             
             if not result:
                 logger.error(f"任务失败，第{i}步执行失败")
@@ -156,7 +156,7 @@ class GameBase:
         return True
 
 
-class MultiAppGameBase:
+class MultiAppBase:
     """多应用切换自动化基类，适用于需要多个软件配合的场景"""
     
     def __init__(self, config: Dict):
@@ -171,22 +171,22 @@ class MultiAppGameBase:
         
         # 全局组件
         self.ocr = OCRRecognizer(use_gpu=config.get('use_gpu', True))
-        self.input = InputController(
+        self.input_controller = InputController(
             click_delay=config.get('click_delay', 0.2),
             type_delay=config.get('type_delay', 0.05)
         )
-        self.retry = RetryManager(
+        self.retry_manager = RetryManager(
             max_retries=config.get('max_retries', 3),
             retry_delay=config.get('retry_delay', 1)
         )
         
         # 应用状态管理
         self.app_states: Dict[str, Dict[str, Any]] = {}  # 每个应用的状态
-        self.current_app: Optional[str] = None  # 当前活跃的应用
-        self.current_capture: Optional[ScreenCapture] = None  # 当前应用的截图实例
+        self.active_app: Optional[str] = None  # 当前活跃的应用
+        self.active_capture: Optional[ScreenCapture] = None  # 当前应用的截图实例
         
         # 操作步骤，子类需要覆盖
-        self.steps: List[Dict] = []
+        self.task_steps: List[Dict] = []
         
         logger.info(f"初始化多应用自动化，包含应用: {list(self.apps_config.keys())}")
     
@@ -271,8 +271,8 @@ class MultiAppGameBase:
             time.sleep(0.5)
             
             # 更新当前应用和截图实例
-            self.current_app = app_name
-            self.current_capture = ScreenCapture(window_title)
+            self.active_app = app_name
+            self.active_capture = ScreenCapture(window_title)
             logger.info(f"切换到应用[{app_name}]成功")
             return True
         except Exception as e:
@@ -308,9 +308,9 @@ class MultiAppGameBase:
                 time.sleep(0.5)
             
             self.app_states[app_name]['running'] = False
-            if self.current_app == app_name:
-                self.current_app = None
-                self.current_capture = None
+            if self.active_app == app_name:
+                self.active_app = None
+                self.active_capture = None
             
             logger.info(f"应用[{app_name}]已关闭")
             return True
@@ -321,13 +321,13 @@ class MultiAppGameBase:
     def wait_for_text(self, target_text: str, timeout: int = 10, 
                      threshold: float = 0.8, interval: float = 0.5) -> Optional[Dict]:
         """等待当前应用中出现指定文本"""
-        if not self.current_capture:
+        if not self.active_capture:
             logger.error("没有活跃应用，请先切换到对应应用")
             return None
         
         start_time = time.time()
         while time.time() - start_time < timeout:
-            img = self.current_capture.capture()
+            img = self.active_capture.capture()
             res = self.ocr.find_text(img, target_text, threshold)
             if res:
                 return res
@@ -339,7 +339,7 @@ class MultiAppGameBase:
     def click_text(self, target_text: str, timeout: int = 10, 
                   threshold: float = 0.8, double: bool = False) -> bool:
         """点击当前应用中的指定文本"""
-        if not self.current_capture or not self.current_app:
+        if not self.active_capture or not self.active_app:
             logger.error("没有活跃应用，请先切换到对应应用")
             return False
         
@@ -350,12 +350,12 @@ class MultiAppGameBase:
         
         x, y = res['center']
         # 转屏幕坐标
-        app_state = self.app_states[self.current_app]
+        app_state = self.app_states[self.active_app]
         left, top, _, _ = win32gui.GetWindowRect(app_state['hwnd'])
         screen_x = int(left + x)
         screen_y = int(top + y)
         
-        self.input.click(screen_x, screen_y, double=double)
+        self.input_controller.click(screen_x, screen_y, double=double)
         logger.info(f"点击文本成功: [{target_text}] 位置: ({screen_x}, {screen_y})")
         return True
     
@@ -384,7 +384,7 @@ class MultiAppGameBase:
                 return self.close_app(step['app_name'], force=step.get('force', False))
             
             # 通用操作步骤，需要当前有活跃应用
-            if not self.current_app:
+            if not self.active_app:
                 logger.error("执行操作步骤前请先切换到对应应用")
                 return False
             
@@ -403,10 +403,10 @@ class MultiAppGameBase:
                 time.sleep(step.get('seconds', 1))
                 return True
             elif step_type == 'press':
-                self.input.press_key(step['key'])
+                self.input_controller.press_key(step['key'])
                 return True
             elif step_type == 'hotkey':
-                self.input.hotkey(*step['keys'])
+                self.input_controller.hotkey(*step['keys'])
                 return True
             elif step_type == 'custom':
                 func = getattr(self, step['func'])
@@ -422,11 +422,11 @@ class MultiAppGameBase:
         """执行所有操作步骤"""
         logger.info("开始执行多应用自动化任务")
         success_count = 0
-        total_steps = len(self.steps)
+        total_steps = len(self.task_steps)
         
-        for i, step in enumerate(self.steps, 1):
+        for i, step in enumerate(self.task_steps, 1):
             logger.info(f"步骤 [{i}/{total_steps}]")
-            result = self.retry.run(lambda: self.execute_step(step))
+            result = self.retry_manager.run(lambda: self.execute_step(step))
             
             if not result:
                 logger.error(f"任务失败，第{i}步执行失败")

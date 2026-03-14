@@ -22,7 +22,7 @@ class ZenlessZoneZero(GameBase):
         }
         
         # 操作步骤配置
-        self.steps = [
+        self.task_steps = [
             {
                 'name': '等待开始游戏按钮',
                 'type': 'wait',
@@ -93,7 +93,7 @@ class ZZZMultiApp(MultiAppGameBase):
         super().__init__(config)
         
         # 操作步骤，完全按照需求实现
-        self.steps = [
+        self.task_steps = [
             # ========== 第一步：启动两个应用 ==========
             {
                 'name': '启动绝区零游戏本体',
