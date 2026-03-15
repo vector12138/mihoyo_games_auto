@@ -51,17 +51,6 @@ class ZenlessZoneZero(MultiAppBase):
                 'seconds': 10
             },
             {
-                'name': '激活仪表盘',
-                'type': 'click',
-                'text': '仪表',
-                'timeout': 10
-            },
-            {
-                'name': '等待辅助窗口激活',
-                'type': 'sleep',
-                'seconds': 10
-            },
-            {
                 'name': '点击一条龙按钮',
                 'type': 'click',
                 'text': self.buttons['daily_task'],
@@ -70,7 +59,7 @@ class ZenlessZoneZero(MultiAppBase):
             {
                 'name': '等待一条龙任务执行完成（10分钟）',
                 'type': 'sleep',
-                'seconds': 600  # 可根据实际情况调整时间
+                'seconds': 100  # 可根据实际情况调整时间
             },
             {
                 'name': '切换到绝区零游戏窗口',

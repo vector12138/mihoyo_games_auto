@@ -24,7 +24,7 @@ class OCRRecognizer:
             text_rec_score_thresh=0.5,  # 设置识别分数阈值
             text_det_thresh=0.3,   # 降低检测分数阈值
             text_det_box_thresh=0.3,  # 降低检测框阈值
-            text_det_unclip_ratio=2.0 # 增大检测框大小
+            text_det_unclip_ratio=3.0 # 增大检测框大小
         )
     
     def recognize(self, image: np.ndarray, threshold: float = 0.8) -> List[Dict]:
@@ -44,6 +44,7 @@ class OCRRecognizer:
 
             min_len = min(len(texts), len(scores), len(bboxs))
             for j in range(min_len):
+                # logger.debug(f"识别到文本: {texts[j]} 置信度: {scores[j]:.4f}")
                 text = texts[j]
                 confidence = scores[j]
                 bbox = bboxs[j]

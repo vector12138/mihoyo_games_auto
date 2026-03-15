@@ -86,6 +86,24 @@ class MultiAppBase:
         current_foreground_hwnd = win32gui.GetForegroundWindow()
         if current_foreground_hwnd != hwnd:
             raise ValueError(f"切换失败，当前前台窗口句柄：{current_foreground_hwnd}（目标：{hwnd}）")
+        
+    def _find_windows_by_title(self, keyword: str) -> List[int]:
+        """
+        查找标题中包含指定关键词的所有窗口
+        返回窗口句柄列表
+        :param keyword: 窗口标题中包含的关键词
+        :return: 包含所有匹配窗口句柄的列表
+        """
+        hwnds = []
+        
+        def callback(hwnd, _):
+            title = win32gui.GetWindowText(hwnd)
+            if keyword in title:  # 使用 in 进行模糊匹配
+                hwnds.append(hwnd)
+        
+        win32gui.EnumWindows(callback, None)
+
+        return hwnds
     
     def launch_app(self, app_name: str, timeout: int = 30) -> bool:
         """
@@ -99,10 +117,11 @@ class MultiAppBase:
             return False
         
         app_config = self.apps_config[app_name]
-        app_path = app_config.get('app_path')
+        app_path = app_config.get('app_path', '')
         window_title = app_config.get('window_title')
+        notify_window = app_config.get('notify_window', False)
         
-        if not app_path or not os.path.exists(app_path):
+        if (not app_path or not os.path.exists(app_path)) and not notify_window:
             logger.error(f"应用[{window_title}]路径不存在: {app_path}")
             return False
         
@@ -122,19 +141,21 @@ class MultiAppBase:
             return self.switch_app(app_name)
         
         # 启动应用
-        logger.info(f"启动应用[{window_title}]: {app_path}")
-        try:
-            subprocess.Popen(app_path)
-        except Exception as e:
-            logger.error(f"启动应用[{window_title}]失败: {str(e)}")
-            return False
+        if not notify_window:
+            logger.info(f"启动应用[{window_title}]: {app_path}")
+            try:
+                subprocess.Popen(app_path)
+            except Exception as e:
+                logger.error(f"启动应用[{window_title}]失败: {str(e)}")
+                return False
         
         # 等待窗口出现
         logger.info(f"等待应用[{window_title}]窗口加载...")
         start_time = time.time()
         while time.time() - start_time < timeout:
-            hwnd = win32gui.FindWindow(None, window_title)
-            if hwnd:
+            hwnds = self._find_windows_by_title(window_title)
+            if hwnds:
+                hwnd = hwnds[0]
                 self.app_states[app_name] = {
                     'hwnd': hwnd,
                     'window_title': window_title,
@@ -142,6 +163,7 @@ class MultiAppBase:
                 }
                 logger.info(f"应用[{window_title}]启动成功")
                 return self.switch_app(app_name)
+            
             time.sleep(1)
         
         logger.error(f"等待应用[{window_title}]窗口超时")
@@ -165,12 +187,11 @@ class MultiAppBase:
             # 激活窗口
             win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
             self._force_set_foreground(hwnd)
-            # win32gui.SetForegroundWindow(hwnd)
             time.sleep(0.5)
             
             # 更新当前应用和截图实例
             self.active_app = app_name
-            self.active_capture = ScreenCapture(window_title)
+            self.active_capture = ScreenCapture(hwnd)
             logger.info(f"切换到应用[{window_title}]成功")
             return True
         except Exception as e:

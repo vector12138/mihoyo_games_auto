@@ -10,13 +10,12 @@ import ctypes
 class ScreenCapture:
     """高速截图实现，支持多屏幕和DPI缩放"""
     
-    def __init__(self, window_title: Optional[str] = None):
+    def __init__(self, hwnd: int):
         """
         初始化截图器
-        :param window_title: 窗口标题，不传则截取全屏
+        :param hwnd: 窗口句柄
         """
-        self.window_title = window_title
-        self.hwnd = None
+        self.hwnd = hwnd
         self.monitors = []
         
         # 启用DPI感知
@@ -24,11 +23,6 @@ class ScreenCapture:
         
         # 获取显示器信息
         self._get_monitor_info()
-        
-        if window_title:
-            self.hwnd = self._find_window_exact(window_title)
-            if not self.hwnd:
-                raise Exception(f"未找到窗口: {window_title}")
     
     def _enable_dpi_awareness(self):
         """启用DPI感知"""
@@ -102,17 +96,6 @@ class ScreenCapture:
                 'is_primary': True,
                 'scale': 1.0
             }]
-    
-    def _find_window_exact(self, title: str):
-        """查找窗口"""
-        def enum_callback(hwnd, lParam):
-            if win32gui.IsWindowVisible(hwnd) and win32gui.GetWindowText(hwnd) == title:
-                lParam.append(hwnd)
-            return True
-        
-        handles = []
-        win32gui.EnumWindows(enum_callback, handles)
-        return handles[0] if handles else None
     
     def _get_monitor_from_point(self, x: int, y: int) -> dict:
         """获取点所在的显示器"""

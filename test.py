@@ -78,7 +78,7 @@ def test_capture():
         time.sleep(1)
 
 if __name__ == "__main__":
-    sw = 1
+    sw = 2
     if sw == 1:
         test_capture()
     elif sw == 2:

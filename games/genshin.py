@@ -37,43 +37,34 @@ class GenshinImpact(MultiAppBase):
                 'app_name': 'bettergi',
                 'timeout': 30
             },
+            {
+                'name': '启动原神游戏',
+                'type': 'launch_app',
+                'app_name': 'genshin_game',
+                'timeout': 30
+            },{
+                'name': '检测是否有新版本弹窗',
+                'type': 'launch_app',
+                'app_name': 'bettergi_pop',
+                'timeout': 30
+            },
             # 第二步：处理新版本弹窗
             {
                 'name': '处理新版本弹窗（取消）',
-                'type': 'click',
-                'text': '取消',
-                'timeout': 3
-            },
-            {
-                'name': '处理新版本弹窗（稍后）',
-                'type': 'click',
-                'text': '稍后',
-                'timeout': 3
-            },
-            {
-                'name': '处理新版本弹窗（跳过）',
-                'type': 'click',
-                'text': '跳过',
-                'timeout': 3
-            },
-            {
-                'name': '处理新版本弹窗（知道了）',
-                'type': 'click',
-                'text': '知道了',
-                'timeout': 3
+                'type': 'close_app',
+                'app_name': 'bettergi_pop'
             },
             # 第三步：启动原神
+            {
+                'name': '切换回BetterGI窗口',
+                'type': 'switch_app',
+                'app_name': 'bettergi'
+            },
             {
                 'name': '点击启动游戏',
                 'type': 'click',
                 'text': '启动',
                 'timeout': 10
-            },
-            {
-                'name': '点击启动游戏（备用）',
-                'type': 'click',
-                'text': '启动游戏',
-                'timeout': 5
             },
             {
                 'name': '等待原神启动完成',
