@@ -15,6 +15,7 @@
 ```bash
 # 安装基础依赖
 pip install -r requirements.txt
+pip install paddlepaddle-gpu==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 
 # （可选）如果需要GPU加速，先安装CUDA版本的paddlepaddle
 # 参考：https://www.paddlepaddle.org.cn/install/quick

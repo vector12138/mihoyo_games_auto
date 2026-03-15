@@ -4,7 +4,10 @@
 """
 
 from .telegram_notifier import TelegramNotifier
+from .util import get_prj_root
+
 
 __all__ = [
-    'TelegramNotifier'
+    'TelegramNotifier',
+    'get_prj_root'
 ]

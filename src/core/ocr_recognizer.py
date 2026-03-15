@@ -2,17 +2,22 @@ from paddleocr import PaddleOCR
 import numpy as np
 from typing import List, Tuple, Dict, Optional
 from loguru import logger
-
+import cv2
+import os
+import time
+from ..utils import get_prj_root
 
 class OCRRecognizer:
     """PaddleOCR封装，识别图像中的文本和位置"""
     
-    def __init__(self, lang: str = 'ch', use_gpu: bool = True):
+    def __init__(self, lang: str = 'ch', use_gpu: bool = True, debug: bool = False):
         """
         初始化OCR识别器
         :param lang: 语言，默认中文
         :param use_gpu: 是否使用GPU加速
         """
+        self.debug = debug
+
         logger.info("初始化OCR识别器...")
         # 新版本PaddleOCR使用device参数替代use_gpu
         device = 'gpu' if use_gpu else 'cpu'
@@ -20,7 +25,10 @@ class OCRRecognizer:
             use_textline_orientation=True,  # 替代旧的use_angle_cls
             lang=lang,
             device=device,
-            text_rec_score_thresh=0.5  # 设置识别分数阈值
+            text_rec_score_thresh=0.5,  # 设置识别分数阈值
+            text_det_thresh=0.3,   # 降低检测分数阈值
+            text_det_box_thresh=0.3,  # 降低检测框阈值
+            text_det_unclip_ratio=2.0 # 增大检测框大小
         )
     
     def recognize(self, image: np.ndarray, threshold: float = 0.8) -> List[Dict]:
@@ -31,18 +39,18 @@ class OCRRecognizer:
         :return: 识别结果列表，每个元素包含text, confidence, bbox
         """
         result = self.ocr.predict(image)
-        if not result or not result[0]:
-            return []
         
         recognized = []
-        for line in result[0]:
-            bbox = line[0]  # [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
-            text_info = line[1]
-            
-            if isinstance(text_info, (list, tuple)) and len(text_info) >= 2:
-                text = text_info[0]
-                confidence = text_info[1]
-                
+        for res in result:
+            texts = res.get('rec_texts', [])
+            scores = res.get('rec_scores', [])
+            bboxs = res.get('rec_polys', [])
+
+            min_len = min(len(texts), len(scores), len(bboxs))
+            for j in range(min_len):
+                text = texts[j]
+                confidence = scores[j]
+                bbox = bboxs[j]
                 if confidence >= threshold:
                     # 计算中心点坐标
                     center_x = (bbox[0][0] + bbox[2][0]) / 2
@@ -59,6 +67,10 @@ class OCRRecognizer:
                         'width': width,
                         'height': height
                     })
+                    
+        # 保存调试信息
+        if self.debug:
+            self._save_debug_info(image, recognized)
         
         logger.debug(f"识别到{len(recognized)}个有效文本")
         return recognized
@@ -98,3 +110,36 @@ class OCRRecognizer:
                 matches.append(res)
         
         return matches
+    
+    def _save_debug_info(self, image: np.ndarray, recognized: List[Dict]):
+        """
+        保存调试信息，包括截图和识别的文本
+        :param image: 原始图像
+        :param recognized: 识别结果
+        """
+        cur_prj_path = get_prj_root()
+
+        # 创建tmp文件夹
+        tmp_dir = os.path.join(cur_prj_path, 'tmp')
+        os.makedirs(tmp_dir, exist_ok=True)
+        
+        # 生成时间戳作为文件名
+        timestamp = time.strftime('%Y%m%d_%H%M%S')
+        
+        # 保存截图
+        image_path = os.path.join(tmp_dir, f'ocr_debug_{timestamp}.png')
+        cv2.imwrite(image_path, image)
+        logger.debug(f"保存OCR调试截图到: {image_path}")
+        
+        # 保存识别的文本
+        text_path = os.path.join(tmp_dir, f'ocr_debug_{timestamp}.txt')
+        with open(text_path, 'w', encoding='utf-8') as f:
+            f.write(f"识别时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"识别到的文本数量: {len(recognized)}\n\n")
+            for i, item in enumerate(recognized, 1):
+                f.write(f"[{i}] 文本: {item['text']}\n")
+                f.write(f"   置信度: {item['confidence']:.4f}\n")
+                f.write(f"   位置: {item['center']}\n")
+                f.write(f"   边界框: {item['bbox']}\n\n")
+        
+        logger.debug(f"保存OCR调试文本到: {text_path}")

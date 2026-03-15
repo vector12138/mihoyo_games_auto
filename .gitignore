@@ -11,6 +11,10 @@ config.yml
 *.tmp
 *.temp
 
+# 临时文件夹
+temp/
+tmp/
+
 # 图像识别模板
 templates/debug/
 

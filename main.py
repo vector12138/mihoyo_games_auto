@@ -60,6 +60,10 @@ def main():
     # 加载配置
     try:
         config = Config()
+        debug = config.get("global.debug", False)
+        if debug:
+            logger.info("调试模式已开启")
+            setup_logging(log_level="DEBUG")
     except Exception as e:
         logger.error(f"加载配置失败: {str(e)}")
         sys.exit(1)
@@ -115,7 +119,7 @@ def main():
         
         try:
             # 传递游戏配置 + 全局配置
-            game = GameClass(game_config, global_config=config.config)
+            game = GameClass(game_config, global_config=config.get("global"))
             result = game.run()
             
             if result:

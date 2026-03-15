@@ -33,7 +33,9 @@ class MultiAppBase:
             raise ValueError("多应用配置不能为空，请在配置中添加apps字段")
         
         # 全局组件
-        self.ocr = OCRRecognizer(use_gpu=global_config.get('use_gpu', True))
+        self.ocr = OCRRecognizer(use_gpu=global_config.get('use_gpu', True), 
+                                 debug=global_config.get('debug', False))
+        
         self.input_controller = InputController(
             click_delay=global_config.get('click_delay', 0.2),
             type_delay=global_config.get('type_delay', 0.05)
