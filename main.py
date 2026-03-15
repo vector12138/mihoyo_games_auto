@@ -89,16 +89,14 @@ def main():
     # 原神（统一多应用模式，自动识别是否使用BetterGI）
     if config.get("genshin.enabled"):
         genshin_config = config.get_game_config("genshin")
-        use_bettergi = config.get("genshin.use_bettergi", False)
-        mode_str = "（BetterGI模式）" if use_bettergi else "（纯游戏模式）"
+        mode_str = "（BetterGI模式）"
         logger.info(f"原神已启用{mode_str}")
         games_to_run.append(("原神", genshin_config, GenshinImpact))
     
     # 绝区零（统一多应用模式，自动识别是否使用辅助工具）
     if config.get("zzz.enabled"):
         zzz_config = config.get_game_config("zzz")
-        use_onedragen = config.get("zzz.use_onedragen", False)
-        mode_str = "（多应用辅助模式）" if use_onedragen else "（纯游戏模式）"
+        mode_str = "（多应用辅助模式）"
         logger.info(f"绝区零已启用{mode_str}")
         games_to_run.append(("绝区零", zzz_config, ZenlessZoneZero))
     
