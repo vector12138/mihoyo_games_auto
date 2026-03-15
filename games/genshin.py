@@ -1,7 +1,3 @@
-import time
-import win32gui
-import subprocess
-import os
 from src.core import MultiAppBase
 from typing import Dict
 from loguru import logger
@@ -17,29 +13,8 @@ class GenshinImpact(MultiAppBase):
         :param global_config: 全局配置（可选）
         """
         # 初始化多应用配置
-        self.global_config = global_config
-        app_configs = {}
         
-        # 基础游戏应用
-        app_configs['genshin_game'] = {
-            'app_path': config.get('game_path', ''),
-            'window_title': config.get('window_title', '原神')
-        }
-        
-        # 如果使用BetterGI，添加BetterGI应用
-        if config.get('use_bettergi', False):
-            app_configs['bettergi'] = {
-                'app_path': config.get('bettergi_path', ''),
-                'window_title': 'BetterGI'
-            }
-        
-        # 组装多应用配置
-        multi_config = {
-            **config,
-            'apps': app_configs
-        }
-        
-        super().__init__(multi_config)
+        super().__init__(config, global_config)
         
         # 按钮文本配置
         self.buttons = {
@@ -51,75 +26,7 @@ class GenshinImpact(MultiAppBase):
             'exit': '退出游戏'
         }
         
-        # 根据模式选择操作步骤
-        use_bettergi = config.get('use_bettergi', False)
-        if use_bettergi:
-            self.task_steps = self._get_bettergi_steps()
-        else:
-            self.task_steps = self._get_normal_game_steps()
-    
-    def _get_normal_game_steps(self) -> list:
-        """获取纯游戏模式的操作步骤"""
-        return [
-            {
-                'name': '启动原神游戏',
-                'type': 'launch_app',
-                'app_name': 'genshin_game',
-                'timeout': 60
-            },
-            {
-                'name': '等待登录按钮',
-                'type': 'wait',
-                'text': self.buttons['login'],
-                'timeout': 30
-            },
-            {
-                'name': '点击登录',
-                'type': 'click',
-                'text': self.buttons['login']
-            },
-            {
-                'name': '等待进入游戏按钮',
-                'type': 'wait',
-                'text': self.buttons['enter_game'],
-                'timeout': 60
-            },
-            {
-                'name': '点击进入游戏',
-                'type': 'click',
-                'text': self.buttons['enter_game']
-            },
-            {
-                'name': '等待游戏加载完成',
-                'type': 'sleep',
-                'seconds': 20
-            },
-            {
-                'name': '打开每日奖励界面',
-                'type': 'custom',
-                'func': 'open_daily_reward'
-            },
-            {
-                'name': '领取每日奖励',
-                'type': 'click',
-                'text': self.buttons['claim']
-            },
-            {
-                'name': '确认领取',
-                'type': 'click',
-                'text': self.buttons['confirm']
-            },
-            {
-                'name': '完成每日委托',
-                'type': 'custom',
-                'func': 'do_daily_quests'
-            },
-            {
-                'name': '退出游戏',
-                'type': 'click',
-                'text': self.buttons['exit']
-            }
-        ]
+        self.task_steps = self._get_bettergi_steps()
     
     def _get_bettergi_steps(self) -> list:
         """获取BetterGI模式的操作步骤"""
@@ -172,7 +79,7 @@ class GenshinImpact(MultiAppBase):
             {
                 'name': '等待原神启动完成',
                 'type': 'sleep',
-                'seconds': 60
+                'seconds': 120
             },
             # 第四步：启动一条龙
             {
@@ -187,33 +94,15 @@ class GenshinImpact(MultiAppBase):
                 'timeout': 10
             },
             {
-                'name': '点击日常任务按钮（备用）',
-                'type': 'click',
-                'text': '日常任务',
-                'timeout': 5
-            },
-            {
-                'name': '点击自动任务按钮（备用）',
-                'type': 'click',
-                'text': '自动任务',
+                'name': '等待切换到一条龙',
+                'type': 'wait',
+                'text': '▷',
                 'timeout': 5
             },
             {
                 'name': '点击执行按钮',
                 'type': 'click',
-                'text': '▶',
-                'timeout': 10
-            },
-            {
-                'name': '点击执行按钮（执行）',
-                'type': 'click',
-                'text': '执行',
-                'timeout': 10
-            },
-            {
-                'name': '点击执行按钮（开始）',
-                'type': 'click',
-                'text': '开始',
+                'text': '▷',
                 'timeout': 10
             },
             # 第五步：等待任务完成
@@ -227,29 +116,12 @@ class GenshinImpact(MultiAppBase):
                 'name': '关闭原神游戏',
                 'type': 'close_app',
                 'app_name': 'genshin_game',
-                'force': False
+                'force': True
             },
             {
                 'name': '关闭BetterGI工具',
                 'type': 'close_app',
                 'app_name': 'bettergi',
-                'force': False
+                'force': True
             }
         ]
-    
-    def open_daily_reward(self) -> bool:
-        """自定义方法：打开每日奖励界面"""
-        logger.info("打开每日奖励界面")
-        # 按F3打开活动界面（根据实际游戏设置修改）
-        self.input_controller.press_key('f3')
-        time.sleep(2)
-        # 点击每日奖励标签
-        return self.click_text(self.buttons['daily_reward'])
-    
-    def do_daily_quests(self) -> bool:
-        """自定义方法：完成每日委托"""
-        logger.info("开始执行每日委托")
-        # 这里可以实现具体的每日委托逻辑
-        # 比如传送、打怪、提交任务等
-        time.sleep(10)
-        return True

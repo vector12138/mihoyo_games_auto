@@ -6,6 +6,7 @@
 import os
 import sys
 import time
+import ctypes
 from loguru import logger
 from src.config.logging_config import setup_logging
 from src.config import Config
@@ -16,6 +17,41 @@ from src.core import shutdown
 
 # 配置日志
 setup_logging()
+
+# ===================== 管理员权限检测与提权 =====================
+def is_admin():
+    """检测当前脚本是否以管理员权限运行"""
+    try:
+        # Windows下检测管理员权限
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
+
+def run_as_admin():
+    """以管理员权限重新启动当前脚本"""
+    # 获取当前脚本的完整路径和参数
+    script_path = sys.argv[0]
+    params = ' '.join(sys.argv[1:]) if len(sys.argv) > 1 else ''
+    
+    # 调用Windows API请求管理员权限
+    try:
+        ctypes.windll.shell32.ShellExecuteW(
+            None,                      # 父窗口句柄
+            "runas",                   # 操作类型：以管理员运行
+            sys.executable,            # Python解释器路径
+            f'"{script_path}" {params}',# 要执行的脚本路径+参数
+            None,                      # 工作目录
+            1                          # 显示窗口方式（1=正常显示）
+        )
+        sys.exit(0)  # 原普通权限进程退出
+    except Exception as e:
+        print(f"提权失败！请手动以管理员身份运行脚本。错误：{e}")
+        sys.exit(1)
+
+# 启动时检测权限，无管理员权限则自动提权
+if not is_admin():
+    print("当前无管理员权限，正在请求提升...")
+    run_as_admin()
 
 
 def main():
@@ -53,16 +89,14 @@ def main():
     # 原神（统一多应用模式，自动识别是否使用BetterGI）
     if config.get("genshin.enabled"):
         genshin_config = config.get_game_config("genshin")
-        use_bettergi = config.get("genshin.use_bettergi", False)
-        mode_str = "（BetterGI模式）" if use_bettergi else "（纯游戏模式）"
+        mode_str = "（BetterGI模式）"
         logger.info(f"原神已启用{mode_str}")
         games_to_run.append(("原神", genshin_config, GenshinImpact))
     
     # 绝区零（统一多应用模式，自动识别是否使用辅助工具）
     if config.get("zzz.enabled"):
         zzz_config = config.get_game_config("zzz")
-        use_onedragen = config.get("zzz.use_onedragen", False)
-        mode_str = "（多应用辅助模式）" if use_onedragen else "（纯游戏模式）"
+        mode_str = "（多应用辅助模式）"
         logger.info(f"绝区零已启用{mode_str}")
         games_to_run.append(("绝区零", zzz_config, ZenlessZoneZero))
     
@@ -96,6 +130,8 @@ def main():
         
         except Exception as e:
             logger.error(f"{game_name}任务执行出错: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
             if notifier:
                 notifier.send_message(f"❌ {game_name}任务执行出错: {str(e)}")
     

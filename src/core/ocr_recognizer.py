@@ -14,11 +14,13 @@ class OCRRecognizer:
         :param use_gpu: 是否使用GPU加速
         """
         logger.info("初始化OCR识别器...")
+        # 新版本PaddleOCR使用device参数替代use_gpu
+        device = 'gpu' if use_gpu else 'cpu'
         self.ocr = PaddleOCR(
-            use_angle_cls=True,
+            use_textline_orientation=True,  # 替代旧的use_angle_cls
             lang=lang,
-            use_gpu=use_gpu,
-            show_log=False
+            device=device,
+            text_rec_score_thresh=0.5  # 设置识别分数阈值
         )
     
     def recognize(self, image: np.ndarray, threshold: float = 0.8) -> List[Dict]:
@@ -28,32 +30,35 @@ class OCRRecognizer:
         :param threshold: 置信度阈值，低于这个值的结果会被过滤
         :return: 识别结果列表，每个元素包含text, confidence, bbox
         """
-        result = self.ocr.ocr(image, cls=True)
+        result = self.ocr.predict(image)
         if not result or not result[0]:
             return []
         
         recognized = []
         for line in result[0]:
             bbox = line[0]  # [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
-            text = line[1][0]
-            confidence = line[1][1]
+            text_info = line[1]
             
-            if confidence >= threshold:
-                # 计算中心点坐标
-                center_x = (bbox[0][0] + bbox[2][0]) / 2
-                center_y = (bbox[0][1] + bbox[2][1]) / 2
-                # 计算宽高
-                width = bbox[1][0] - bbox[0][0]
-                height = bbox[2][1] - bbox[1][1]
+            if isinstance(text_info, (list, tuple)) and len(text_info) >= 2:
+                text = text_info[0]
+                confidence = text_info[1]
                 
-                recognized.append({
-                    'text': text.strip(),
-                    'confidence': confidence,
-                    'bbox': bbox,
-                    'center': (center_x, center_y),
-                    'width': width,
-                    'height': height
-                })
+                if confidence >= threshold:
+                    # 计算中心点坐标
+                    center_x = (bbox[0][0] + bbox[2][0]) / 2
+                    center_y = (bbox[0][1] + bbox[2][1]) / 2
+                    # 计算宽高
+                    width = bbox[1][0] - bbox[0][0]
+                    height = bbox[2][1] - bbox[1][1]
+                    
+                    recognized.append({
+                        'text': text.strip(),
+                        'confidence': confidence,
+                        'bbox': bbox,
+                        'center': (center_x, center_y),
+                        'width': width,
+                        'height': height
+                    })
         
         logger.debug(f"识别到{len(recognized)}个有效文本")
         return recognized

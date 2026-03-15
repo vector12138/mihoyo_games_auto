@@ -16,8 +16,8 @@ class RetryManager:
         """初始化重试管理器"""
         self.config = config or {}
         self.enabled = self.config.get('enabled', True)
-        self.max_attempts = self.config.get('max_attempts', 3)
-        self.delay_seconds = self.config.get('delay_seconds', 10)
+        self.max_retries = self.config.get('max_retries', 3)
+        self.retry_delay = self.config.get('retry_delay', 10)
         self.backoff_factor = self.config.get('backoff_factor', 2)
         self.max_delay_seconds = self.config.get('max_delay_seconds', 300)
         
@@ -28,7 +28,7 @@ class RetryManager:
         self.retry_on_game_error = self.config.get('retry_on_game_error', True)
         
         if self.enabled:
-            logger.info(f"重试机制已启用，最大尝试次数: {self.max_attempts}")
+            logger.info(f"重试机制已启用，最大尝试次数: {self.max_retries}")
         else:
             logger.info("重试机制未启用")
     
@@ -42,8 +42,8 @@ class RetryManager:
         if not self.enabled:
             return False
         
-        if attempt >= self.max_attempts:
-            logger.debug(f"达到最大尝试次数: {attempt}/{self.max_attempts}")
+        if attempt >= self.max_retries:
+            logger.debug(f"达到最大尝试次数: {attempt}/{self.max_retries}")
             return False
         
         error_str = str(error).lower()
@@ -71,9 +71,9 @@ class RetryManager:
         :return: 延迟时间（秒）
         """
         if attempt <= 1:
-            return self.delay_seconds
+            return self.retry_delay
         
-        delay = self.delay_seconds * (self.backoff_factor ** (attempt - 1))
+        delay = self.retry_delay * (self.backoff_factor ** (attempt - 1))
         return min(delay, self.max_delay_seconds)
     
     def retry(self, func: Callable, *args, **kwargs) -> Any:
@@ -86,9 +86,9 @@ class RetryManager:
         """
         last_error = None
         
-        for attempt in range(1, self.max_attempts + 1):
+        for attempt in range(1, self.max_retries + 1):
             try:
-                logger.debug(f"尝试执行函数: {func.__name__}, 尝试次数: {attempt}/{self.max_attempts}")
+                logger.debug(f"尝试执行函数: {func.__name__}, 尝试次数: {attempt}/{self.max_retries}")
                 return func(*args, **kwargs)
                 
             except Exception as e:
@@ -101,21 +101,21 @@ class RetryManager:
                     raise
                 
                 # 计算并等待延迟
-                if attempt < self.max_attempts:
+                if attempt < self.max_retries:
                     delay = self.calculate_delay(attempt)
-                    logger.info(f"等待 {delay:.1f} 秒后重试 ({attempt}/{self.max_attempts})...")
+                    logger.info(f"等待 {delay:.1f} 秒后重试 ({attempt}/{self.max_retries})...")
                     time.sleep(delay)
         
         # 所有尝试都失败
-        logger.error(f"函数执行完全失败: {func.__name__}, 尝试次数: {self.max_attempts}")
+        logger.error(f"函数执行完全失败: {func.__name__}, 尝试次数: {self.max_retries}")
         raise last_error
     
-    def retry_decorator(self, max_attempts: Optional[int] = None, 
-                       delay_seconds: Optional[float] = None):
+    def retry_decorator(self, max_retries: Optional[int] = None, 
+                       retry_delay: Optional[float] = None):
         """
         创建重试装饰器
-        :param max_attempts: 最大尝试次数（覆盖配置）
-        :param delay_seconds: 初始延迟时间（覆盖配置）
+        :param max_retries: 最大尝试次数（覆盖配置）
+        :param retry_delay: 初始延迟时间（覆盖配置）
         :return: 装饰器函数
         """
         def decorator(func: Callable):
@@ -123,10 +123,10 @@ class RetryManager:
             def wrapper(*args, **kwargs):
                 # 创建临时配置
                 temp_config = self.config.copy()
-                if max_attempts is not None:
-                    temp_config['max_attempts'] = max_attempts
-                if delay_seconds is not None:
-                    temp_config['delay_seconds'] = delay_seconds
+                if max_retries is not None:
+                    temp_config['max_retries'] = max_retries
+                if retry_delay is not None:
+                    temp_config['retry_delay'] = retry_delay
                 
                 # 创建临时重试管理器
                 temp_retry = RetryManager(temp_config)
@@ -137,20 +137,20 @@ class RetryManager:
 # 预定义的重试策略
 RETRY_STRATEGIES = {
     'aggressive': {
-        'max_attempts': 5,
-        'delay_seconds': 5,
+        'max_retries': 5,
+        'retry_delay': 5,
         'backoff_factor': 1.5,
         'max_delay_seconds': 60
     },
     'conservative': {
-        'max_attempts': 3,
-        'delay_seconds': 30,
+        'max_retries': 3,
+        'retry_delay': 30,
         'backoff_factor': 2,
         'max_delay_seconds': 300
     },
     'quick': {
-        'max_attempts': 2,
-        'delay_seconds': 2,
+        'max_retries': 2,
+        'retry_delay': 2,
         'backoff_factor': 1,
         'max_delay_seconds': 10
     }

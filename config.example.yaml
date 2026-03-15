@@ -37,7 +37,7 @@ genshin:
     #   text: "自定义按钮"
 
 # 绝区零配置（多应用模式，游戏本体+zzz-onedragen辅助）
-zzz_multi_app:
+zzz:
   enabled: true                  # 是否启用多应用模式
   game_name: "绝区零(多应用)"
   # 多应用配置
@@ -51,3 +51,4 @@ zzz_multi_app:
       window_title: "zzz-onedragen"  # 辅助工具的窗口标题，根据实际修改
       app_path: "C:\\Program Files\\zzz-onedragen\\zzz-onedragen.exe"  # 辅助工具路径
   auto_launch: true
+  use_onedragen: true

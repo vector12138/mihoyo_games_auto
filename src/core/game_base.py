@@ -11,174 +11,34 @@ from .input_controller import InputController
 from .retry_manager import RetryManager
 
 
-class GameBase:
-    """游戏自动化基类，所有游戏继承此类实现"""
-    
-    def __init__(self, config: Dict):
-        """
-        初始化游戏
-        :param config: 游戏配置
-        """
-        self.config = config
-        self.game_name = config.get('game_name', 'Unknown')
-        self.window_title = config.get('window_title', '')
-        
-        # 初始化核心组件
-        self.screen_capture = ScreenCapture(self.window_title)
-        self.ocr = OCRRecognizer(use_gpu=config.get('use_gpu', True))
-        self.input_controller = InputController(
-            click_delay=config.get('click_delay', 0.2),
-            type_delay=config.get('type_delay', 0.05)
-        )
-        self.retry_manager = RetryManager(
-            max_retries=config.get('max_retries', 3),
-            retry_delay=config.get('retry_delay', 1)
-        )
-        
-        # 游戏按钮配置，子类需要覆盖
-        self.buttons: Dict[str, str] = {}
-        # 游戏操作步骤，子类需要覆盖
-        self.task_steps: List[Dict] = []
-        
-        logger.info(f"初始化游戏: {self.game_name}")
-    
-    def wait_for_text(self, target_text: str, timeout: int = 10, 
-                     threshold: float = 0.8, interval: float = 0.5) -> Optional[Dict]:
-        """
-        等待指定文本出现
-        :param target_text: 目标文本
-        :param timeout: 超时时间（秒）
-        :param threshold: 置信度阈值
-        :param interval: 检查间隔（秒）
-        :return: 匹配到的文本信息，超时返回None
-        """
-        start_time = time.time()
-        while time.time() - start_time < timeout:
-            img = self.screen_capture.capture()
-            res = self.ocr.find_text(img, target_text, threshold)
-            if res:
-                return res
-            time.sleep(interval)
-        
-        logger.warning(f"等待文本超时: {target_text}")
-        return None
-    
-    def click_text(self, target_text: str, timeout: int = 10, 
-                  threshold: float = 0.8, double: bool = False) -> bool:
-        """
-        点击指定文本
-        :param target_text: 目标文本
-        :param timeout: 超时时间
-        :param threshold: 置信度阈值
-        :param double: 是否双击
-        :return: 是否点击成功
-        """
-        res = self.wait_for_text(target_text, timeout, threshold)
-        if not res:
-            logger.error(f"点击失败，未找到文本: {target_text}")
-            return False
-        
-        x, y = res['center']
-        # 窗口坐标转屏幕坐标（如果是窗口模式）
-        if self.screen_capture.hwnd:
-            left, top, _, _ = win32gui.GetWindowRect(self.screen_capture.hwnd)
-            x += left
-            y += top
-        
-        self.input_controller.click(int(x), int(y), double=double)
-        logger.info(f"点击文本成功: {target_text} 位置: ({int(x)}, {int(y)})")
-        return True
-    
-    def execute_step(self, step: Dict) -> bool:
-        """
-        执行单个操作步骤
-        :param step: 步骤配置
-        支持的步骤类型:
-        - click: 点击文本 {"type": "click", "text": "按钮文本", "timeout": 10}
-        - wait: 等待文本出现 {"type": "wait", "text": "等待的文本", "timeout": 10}
-        - sleep: 等待固定时间 {"type": "sleep", "seconds": 2}
-        - press: 按下按键 {"type": "press", "key": "w"}
-        - hotkey: 按下组合键 {"type": "hotkey", "keys": ["ctrl", "v"]}
-        - custom: 自定义方法 {"type": "custom", "func": 方法名}
-        """
-        step_type = step.get('type')
-        step_name = step.get('name', f'未命名步骤({step_type})')
-        logger.info(f"执行步骤: {step_name}")
-        
-        try:
-            if step_type == 'click':
-                return self.click_text(
-                    step['text'], 
-                    timeout=step.get('timeout', 10),
-                    double=step.get('double', False)
-                )
-            elif step_type == 'wait':
-                return self.wait_for_text(
-                    step['text'],
-                    timeout=step.get('timeout', 10)
-                ) is not None
-            elif step_type == 'sleep':
-                time.sleep(step.get('seconds', 1))
-                return True
-            elif step_type == 'press':
-                self.input_controller.press_key(step['key'])
-                return True
-            elif step_type == 'hotkey':
-                self.input_controller.hotkey(*step['keys'])
-                return True
-            elif step_type == 'custom':
-                func = getattr(self, step['func'])
-                return func()
-            else:
-                logger.error(f"未知步骤类型: {step_type}")
-                return False
-        except Exception as e:
-            logger.error(f"步骤执行失败: {step_name} 错误: {str(e)}")
-            return False
-    
-    def run(self) -> bool:
-        """执行所有操作步骤"""
-        logger.info(f"开始执行{self.game_name}自动化任务")
-        success_count = 0
-        total_steps = len(self.task_steps)
-        
-        for i, step in enumerate(self.task_steps, 1):
-            logger.info(f"步骤 [{i}/{total_steps}]")
-            result = self.retry_manager.run(lambda: self.execute_step(step))
-            
-            if not result:
-                logger.error(f"任务失败，第{i}步执行失败")
-                return False
-            
-            success_count += 1
-        
-        logger.info(f"任务执行完成，成功{success_count}/{total_steps}步")
-        return True
+import win32api
+import win32process
+import ctypes
+
+# 第一步：设置系统权限（允许设置前台窗口）
 
 
 class MultiAppBase:
     """多应用切换自动化基类，适用于需要多个软件配合的场景"""
     
-    def __init__(self, config: Dict):
+    def __init__(self, config: Dict, global_config: Dict):
         """
         初始化多应用自动化
         :param config: 配置包含apps字段，定义所有需要用到的应用
         """
         self.config = config
+        self.global_config = global_config
         self.apps_config = config.get('apps', {})
         if not self.apps_config:
             raise ValueError("多应用配置不能为空，请在配置中添加apps字段")
         
         # 全局组件
-        self.ocr = OCRRecognizer(use_gpu=config.get('use_gpu', True))
+        self.ocr = OCRRecognizer(use_gpu=global_config.get('use_gpu', True))
         self.input_controller = InputController(
-            click_delay=config.get('click_delay', 0.2),
-            type_delay=config.get('type_delay', 0.05)
+            click_delay=global_config.get('click_delay', 0.2),
+            type_delay=global_config.get('type_delay', 0.05)
         )
-        self.retry_manager = RetryManager(
-            max_retries=config.get('max_retries', 3),
-            retry_delay=config.get('retry_delay', 1)
-        )
+        self.retry_manager = RetryManager(global_config)
         
         # 应用状态管理
         self.app_states: Dict[str, Dict[str, Any]] = {}  # 每个应用的状态
@@ -189,6 +49,41 @@ class MultiAppBase:
         self.task_steps: List[Dict] = []
         
         logger.info(f"初始化多应用自动化，包含应用: {list(self.apps_config.keys())}")
+
+    # 第二步：组合操作切换窗口（Alt键 + 恢复窗口 + 强制前台）
+    def _force_set_foreground(self, hwnd):
+        # 1. 前置：确保窗口有效且未最小化
+        if not win32gui.IsWindow(hwnd):
+            return False, "窗口句柄无效"
+        if win32gui.IsIconic(hwnd):  # 如果窗口最小化，先恢复
+            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+        time.sleep(0.1)  # 等待窗口恢复
+        
+        # 2. 获取前台权限（核心：模拟Alt键 + 权限设置）
+        user32 = ctypes.WinDLL('user32', use_last_error=True)
+        # 获取当前进程ID
+        pid = win32process.GetCurrentProcessId()
+        # 允许当前进程设置前台窗口（参数为0表示允许所有进程，也可填当前pid）
+        user32.AllowSetForegroundWindow(pid)
+        # 另一个关键API：解除前台窗口锁定
+        user32.SystemParametersInfoW(win32con.SPI_SETFOREGROUNDLOCKTIMEOUT, 0, 0, 0)
+        # 发送Alt键按下+松开（让系统认为当前进程有用户交互）
+        win32api.keybd_event(win32con.VK_MENU, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_MENU, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(0.1)
+        
+        # 3. 尝试多种方式切换前台
+        # 方式1：SetForegroundWindow
+        res1 = win32gui.SetForegroundWindow(hwnd)
+        # 方式2：BringWindowToTop（备用）
+        win32gui.BringWindowToTop(hwnd)
+        # 方式3：SetActiveWindow（补充）
+        win32gui.SetActiveWindow(hwnd)
+        
+        # 验证：检查是否真的切换成功
+        current_foreground_hwnd = win32gui.GetForegroundWindow()
+        if current_foreground_hwnd != hwnd:
+            raise ValueError(f"切换失败，当前前台窗口句柄：{current_foreground_hwnd}（目标：{hwnd}）")
     
     def launch_app(self, app_name: str, timeout: int = 30) -> bool:
         """
@@ -267,7 +162,8 @@ class MultiAppBase:
         try:
             # 激活窗口
             win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-            win32gui.SetForegroundWindow(hwnd)
+            self._force_set_foreground(hwnd)
+            # win32gui.SetForegroundWindow(hwnd)
             time.sleep(0.5)
             
             # 更新当前应用和截图实例
@@ -366,7 +262,7 @@ class MultiAppBase:
         - launch_app: 启动应用 {"type": "launch_app", "app_name": "应用名", "timeout": 30}
         - switch_app: 切换应用 {"type": "switch_app", "app_name": "应用名"}
         - close_app: 关闭应用 {"type": "close_app", "app_name": "应用名", "force": false}
-        - 其他步骤和GameBase一致: click/wait/sleep/press/hotkey/custom
+        - click/wait/sleep/press/hotkey/custom
         """
         step_type = step.get('type')
         step_name = step.get('name', f'未命名步骤({step_type})')
@@ -426,7 +322,7 @@ class MultiAppBase:
         
         for i, step in enumerate(self.task_steps, 1):
             logger.info(f"步骤 [{i}/{total_steps}]")
-            result = self.retry_manager.run(lambda: self.execute_step(step))
+            result = self.retry_manager.retry(lambda: self.execute_step(step))
             
             if not result:
                 logger.error(f"任务失败，第{i}步执行失败")
