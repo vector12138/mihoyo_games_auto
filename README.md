@@ -45,25 +45,25 @@ python main.py
 
 ## 🎯 新增游戏教程
 1. 在`games/`目录下新建游戏文件，比如`hsr.py`
-2. 继承`GameBase`类
+2. 继承`MultiAppBase`类
 3. 配置`self.buttons`按钮文本
-4. 配置`self.steps`操作步骤
+4. 配置`self.task_steps`操作步骤
 5. 实现自定义方法（可选）
 6. 在`config.example.yaml`添加对应游戏配置
 7. 在`main.py`导入并添加到执行列表
 
 ### 示例：
 ```python
-from game_base import GameBase
+from src.core import MultiAppBase
 
-class StarRail(GameBase):
-    def __init__(self, config):
+class StarRail(MultiAppBase):
+    def __init__(self, config, global_config=None):
         super().__init__(config)
         self.buttons = {
             'login': '登录',
             'enter': '进入游戏'
         }
-        self.steps = [
+        self.task_steps = [
             {'type': 'click', 'text': self.buttons['login']},
             {'type': 'click', 'text': self.buttons['enter']}
         ]
@@ -125,16 +125,20 @@ mihoyo_games_auto/
 ├── games/                  # 🎮 各个游戏实现目录
 │   ├── genshin.py          # 原神实现
 │   └── zzz.py              # 绝区零实现
-├── screen_capture.py       # 📸 BitBlt截图模块
-├── ocr_recognizer.py       # 🔍 PaddleOCR识别模块
-├── input_controller.py     # ⌨️ 鼠标键盘控制模块
-├── game_base.py            # 🏗️ 游戏基类（核心框架）
-├── config.py               # ⚙️ 配置管理
+├── src/                    # 🧱 核心源码目录
+│   ├── core/               # 核心组件
+│   │   ├── game_base.py    # 游戏基类 + 多应用基类
+│   │   ├── screen_capture.py # BitBlt截图模块
+│   │   ├── ocr_recognizer.py # PaddleOCR识别模块
+│   │   ├── input_controller.py # 鼠标键盘控制模块
+│   │   ├── retry_manager.py # 重试管理器
+│   │   └── shutdown.py     # 关机模块
+│   ├── config/             # 配置管理
+│   │   ├── config.py       # 配置加载
+│   │   └── logging_config.py # 日志配置
+│   └── utils/              # 工具模块
+│       └── telegram_notifier.py # Telegram通知模块
 ├── main.py                 # 🚀 主入口
-├── retry_manager.py        # 🔄 重试管理器
-├── telegram_notifier.py    # 📱 Telegram通知模块
-├── shutdown.py             # ⏰ 关机模块
-├── logging_config.py       # 📝 日志配置模块
 ├── requirements.txt        # 📦 依赖列表
 ├── config.example.yaml     # 📄 示例配置文件
 └── logs/                   # 📝 日志目录

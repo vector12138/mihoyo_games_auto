@@ -13,8 +13,31 @@ class GenshinImpact(MultiAppBase):
         :param global_config: 全局配置（可选）
         """
         # 初始化多应用配置
+        if global_config is None:
+            global_config = {}
         
-        super().__init__(config, global_config)
+        app_configs = {}
+        
+        # 基础游戏应用
+        app_configs['genshin_game'] = {
+            'app_path': config.get('game_path', ''),
+            'window_title': config.get('window_title', '原神')
+        }
+        
+        # 如果使用BetterGI，添加BetterGI应用
+        if config.get('use_bettergi', False):
+            app_configs['bettergi'] = {
+                'app_path': config.get('bettergi_path', ''),
+                'window_title': 'BetterGI'
+            }
+        
+        # 组装多应用配置
+        multi_config = {
+            **config,
+            'apps': app_configs
+        }
+        
+        super().__init__(multi_config, global_config)
         
         # 按钮文本配置
         self.buttons = {

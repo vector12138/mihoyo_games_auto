@@ -12,8 +12,31 @@ class ZenlessZoneZero(MultiAppBase):
         :param config: 游戏配置
         :param global_config: 全局配置（可选）
         """
+        if global_config is None:
+            global_config = {}
+            
+        app_configs = {}
         
-        super().__init__(config, global_config)
+        # 基础游戏应用
+        app_configs['zzz_game'] = {
+            'app_path': config.get('game_path', ''),
+            'window_title': config.get('window_title', '绝区零')
+        }
+        
+        # 如果使用onedragen辅助，添加辅助工具应用
+        if config.get('use_onedragen', False):
+            app_configs['zzz_onedragen'] = {
+                'app_path': config.get('onedragen_path', ''),
+                'window_title': 'zzz-onedragen'
+            }
+        
+        # 组装多应用配置
+        multi_config = {
+            **config,
+            'apps': app_configs
+        }
+        
+        super().__init__(multi_config, global_config)
         
         # 按钮文本配置
         self.buttons = {
