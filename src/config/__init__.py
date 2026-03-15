@@ -4,7 +4,9 @@
 """
 
 from .config import Config
+from .logging_config import setup_logging
 
 __all__ = [
-    'Config'
+    'Config',
+    'setup_logging'
 ]

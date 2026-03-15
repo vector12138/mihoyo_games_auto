@@ -1,14 +1,41 @@
 import time
-from src.core import GameBase, MultiAppBase
+from src.core import MultiAppBase
 from typing import Dict
 from loguru import logger
 
 
-class ZenlessZoneZero(GameBase):
-    """绝区零自动化实现"""
+class ZenlessZoneZero(MultiAppBase):
+    """绝区零多应用自动化实现（支持纯游戏模式 + 多应用辅助模式）"""
     
-    def __init__(self, config: Dict):
-        super().__init__(config)
+    def __init__(self, config: Dict, global_config: Dict = None):
+        """
+        初始化绝区零自动化
+        :param config: 游戏配置
+        :param global_config: 全局配置（可选）
+        """
+        self.global_config = global_config
+        app_configs = {}
+        
+        # 基础游戏应用
+        app_configs['zzz_game'] = {
+            'app_path': config.get('game_path', ''),
+            'window_title': config.get('window_title', '绝区零')
+        }
+        
+        # 如果使用onedragen辅助，添加辅助工具应用
+        if config.get('use_onedragen', False):
+            app_configs['zzz_onedragen'] = {
+                'app_path': config.get('onedragen_path', ''),
+                'window_title': 'zzz-onedragen'
+            }
+        
+        # 组装多应用配置
+        multi_config = {
+            **config,
+            'apps': app_configs
+        }
+        
+        super().__init__(multi_config)
         
         # 按钮文本配置
         self.buttons = {
@@ -21,8 +48,22 @@ class ZenlessZoneZero(GameBase):
             'exit': '退出'
         }
         
-        # 操作步骤配置
-        self.task_steps = [
+        # 根据模式选择操作步骤
+        use_onedragen = config.get('use_onedragen', False)
+        if use_onedragen:
+            self.task_steps = self._get_multi_app_steps()
+        else:
+            self.task_steps = self._get_normal_game_steps()
+    
+    def _get_normal_game_steps(self) -> list:
+        """获取纯游戏模式的操作步骤"""
+        return [
+            {
+                'name': '启动绝区零游戏',
+                'type': 'launch_app',
+                'app_name': 'zzz_game',
+                'timeout': 60
+            },
             {
                 'name': '等待开始游戏按钮',
                 'type': 'wait',
@@ -77,23 +118,9 @@ class ZenlessZoneZero(GameBase):
             }
         ]
     
-    def do_daily_tasks(self) -> bool:
-        """自定义方法：完成每日任务"""
-        logger.info("开始执行绝区零每日任务")
-        # 这里实现具体的每日任务逻辑
-        # 比如清体力、刷副本等
-        time.sleep(10)
-        return True
-
-
-class ZZZMultiApp(MultiAppBase):
-    """绝区零多应用自动化（游戏本体 + zzz-onedragen辅助工具）"""
-    
-    def __init__(self, config: Dict):
-        super().__init__(config)
-        
-        # 操作步骤，完全按照需求实现
-        self.task_steps = [
+    def _get_multi_app_steps(self) -> list:
+        """获取多应用辅助模式的操作步骤"""
+        return [
             # ========== 第一步：启动两个应用 ==========
             {
                 'name': '启动绝区零游戏本体',
@@ -195,8 +222,10 @@ class ZZZMultiApp(MultiAppBase):
             }
         ]
     
-    def get_running_status(self) -> bool:
-        """自定义方法：检查一条龙是否运行完成（可选实现）"""
-        # 可以通过识别辅助工具里的"完成/已结束"文本判断是否执行完成
-        # 替代固定等待时间，更灵活
-        pass
+    def do_daily_tasks(self) -> bool:
+        """自定义方法：完成每日任务"""
+        logger.info("开始执行绝区零每日任务")
+        # 这里实现具体的每日任务逻辑
+        # 比如清体力、刷副本等
+        time.sleep(10)
+        return True

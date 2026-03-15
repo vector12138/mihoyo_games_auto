@@ -7,10 +7,10 @@ import os
 import sys
 import time
 from loguru import logger
-from logging_config import setup_logging
+from src.config.logging_config import setup_logging
 from src.config import Config
 from games.genshin import GenshinImpact
-from games.zzz import ZenlessZoneZero, ZZZMultiApp
+from games.zzz import ZenlessZoneZero
 from src.utils import TelegramNotifier
 from src.core import shutdown
 
@@ -50,26 +50,21 @@ def main():
     # 需要执行的游戏列表
     games_to_run = []
     
-    # 原神
+    # 原神（统一多应用模式，自动识别是否使用BetterGI）
     if config.get("genshin.enabled"):
         genshin_config = config.get_game_config("genshin")
-        # 如果使用BetterGI模式，直接启动BetterGI一条龙
-        if config.get("genshin.use_bettergi"):
-            logger.info("使用BetterGI模式运行原神")
-            games_to_run.append(("genshin_bettergi", genshin_config, None))
-        else:
-            # 普通游戏内自动化模式
-            games_to_run.append(("genshin", genshin_config, GenshinImpact))
+        use_bettergi = config.get("genshin.use_bettergi", False)
+        mode_str = "（BetterGI模式）" if use_bettergi else "（纯游戏模式）"
+        logger.info(f"原神已启用{mode_str}")
+        games_to_run.append(("原神", genshin_config, GenshinImpact))
     
-    # 绝区零（单应用模式）
+    # 绝区零（统一多应用模式，自动识别是否使用辅助工具）
     if config.get("zzz.enabled"):
         zzz_config = config.get_game_config("zzz")
-        games_to_run.append(("zzz", zzz_config, ZenlessZoneZero))
-    
-    # 绝区零（多应用模式）
-    if config.get("zzz_multi_app.enabled"):
-        zzz_multi_config = config.get("zzz_multi_app")
-        games_to_run.append(("zzz_multi", zzz_multi_config, ZZZMultiApp))
+        use_onedragen = config.get("zzz.use_onedragen", False)
+        mode_str = "（多应用辅助模式）" if use_onedragen else "（纯游戏模式）"
+        logger.info(f"绝区零已启用{mode_str}")
+        games_to_run.append(("绝区零", zzz_config, ZenlessZoneZero))
     
     if not games_to_run:
         logger.warning("没有启用任何游戏自动化任务")
@@ -81,19 +76,13 @@ def main():
     success_count = 0
     total_count = len(games_to_run)
     
-    for game_key, game_config, GameClass in games_to_run:
-        game_name = game_config.get('game_name', game_key)
+    for game_name, game_config, GameClass in games_to_run:
         logger.info(f"=== 开始处理{game_name}任务")
         
         try:
-            # 原神BetterGI特殊处理
-            if game_key == "genshin_bettergi":
-                genshin = GenshinImpact(game_config)
-                result = genshin.launch_bettergi()
-            else:
-                # 其他游戏正常执行
-                game = GameClass(game_config)
-                result = game.run()
+            # 传递游戏配置 + 全局配置
+            game = GameClass(game_config, global_config=config.config)
+            result = game.run()
             
             if result:
                 success_count += 1

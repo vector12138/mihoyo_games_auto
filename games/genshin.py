@@ -2,16 +2,44 @@ import time
 import win32gui
 import subprocess
 import os
-from src.core import GameBase, ScreenCapture, OCRRecognizer, InputController
+from src.core import MultiAppBase
 from typing import Dict
 from loguru import logger
 
 
-class GenshinImpact(GameBase):
-    """原神自动化实现"""
+class GenshinImpact(MultiAppBase):
+    """原神多应用自动化实现（支持纯游戏模式 + BetterGI模式）"""
     
-    def __init__(self, config: Dict):
-        super().__init__(config)
+    def __init__(self, config: Dict, global_config: Dict = None):
+        """
+        初始化原神自动化
+        :param config: 游戏配置
+        :param global_config: 全局配置（可选）
+        """
+        # 初始化多应用配置
+        self.global_config = global_config
+        app_configs = {}
+        
+        # 基础游戏应用
+        app_configs['genshin_game'] = {
+            'app_path': config.get('game_path', ''),
+            'window_title': config.get('window_title', '原神')
+        }
+        
+        # 如果使用BetterGI，添加BetterGI应用
+        if config.get('use_bettergi', False):
+            app_configs['bettergi'] = {
+                'app_path': config.get('bettergi_path', ''),
+                'window_title': 'BetterGI'
+            }
+        
+        # 组装多应用配置
+        multi_config = {
+            **config,
+            'apps': app_configs
+        }
+        
+        super().__init__(multi_config)
         
         # 按钮文本配置
         self.buttons = {
@@ -23,8 +51,22 @@ class GenshinImpact(GameBase):
             'exit': '退出游戏'
         }
         
-        # 操作步骤配置，可根据实际情况修改
-        self.task_steps = [
+        # 根据模式选择操作步骤
+        use_bettergi = config.get('use_bettergi', False)
+        if use_bettergi:
+            self.task_steps = self._get_bettergi_steps()
+        else:
+            self.task_steps = self._get_normal_game_steps()
+    
+    def _get_normal_game_steps(self) -> list:
+        """获取纯游戏模式的操作步骤"""
+        return [
+            {
+                'name': '启动原神游戏',
+                'type': 'launch_app',
+                'app_name': 'genshin_game',
+                'timeout': 60
+            },
             {
                 'name': '等待登录按钮',
                 'type': 'wait',
@@ -79,6 +121,122 @@ class GenshinImpact(GameBase):
             }
         ]
     
+    def _get_bettergi_steps(self) -> list:
+        """获取BetterGI模式的操作步骤"""
+        return [
+            # 第一步：启动BetterGI
+            {
+                'name': '启动BetterGI工具',
+                'type': 'launch_app',
+                'app_name': 'bettergi',
+                'timeout': 30
+            },
+            # 第二步：处理新版本弹窗
+            {
+                'name': '处理新版本弹窗（取消）',
+                'type': 'click',
+                'text': '取消',
+                'timeout': 3
+            },
+            {
+                'name': '处理新版本弹窗（稍后）',
+                'type': 'click',
+                'text': '稍后',
+                'timeout': 3
+            },
+            {
+                'name': '处理新版本弹窗（跳过）',
+                'type': 'click',
+                'text': '跳过',
+                'timeout': 3
+            },
+            {
+                'name': '处理新版本弹窗（知道了）',
+                'type': 'click',
+                'text': '知道了',
+                'timeout': 3
+            },
+            # 第三步：启动原神
+            {
+                'name': '点击启动游戏',
+                'type': 'click',
+                'text': '启动',
+                'timeout': 10
+            },
+            {
+                'name': '点击启动游戏（备用）',
+                'type': 'click',
+                'text': '启动游戏',
+                'timeout': 5
+            },
+            {
+                'name': '等待原神启动完成',
+                'type': 'sleep',
+                'seconds': 60
+            },
+            # 第四步：启动一条龙
+            {
+                'name': '切换回BetterGI窗口',
+                'type': 'switch_app',
+                'app_name': 'bettergi'
+            },
+            {
+                'name': '点击一条龙按钮',
+                'type': 'click',
+                'text': '一条龙',
+                'timeout': 10
+            },
+            {
+                'name': '点击日常任务按钮（备用）',
+                'type': 'click',
+                'text': '日常任务',
+                'timeout': 5
+            },
+            {
+                'name': '点击自动任务按钮（备用）',
+                'type': 'click',
+                'text': '自动任务',
+                'timeout': 5
+            },
+            {
+                'name': '点击执行按钮',
+                'type': 'click',
+                'text': '▶',
+                'timeout': 10
+            },
+            {
+                'name': '点击执行按钮（执行）',
+                'type': 'click',
+                'text': '执行',
+                'timeout': 10
+            },
+            {
+                'name': '点击执行按钮（开始）',
+                'type': 'click',
+                'text': '开始',
+                'timeout': 10
+            },
+            # 第五步：等待任务完成
+            {
+                'name': '等待一条龙任务完成（30分钟）',
+                'type': 'sleep',
+                'seconds': 1800
+            },
+            # 第六步：关闭应用
+            {
+                'name': '关闭原神游戏',
+                'type': 'close_app',
+                'app_name': 'genshin_game',
+                'force': False
+            },
+            {
+                'name': '关闭BetterGI工具',
+                'type': 'close_app',
+                'app_name': 'bettergi',
+                'force': False
+            }
+        ]
+    
     def open_daily_reward(self) -> bool:
         """自定义方法：打开每日奖励界面"""
         logger.info("打开每日奖励界面")
@@ -95,128 +253,3 @@ class GenshinImpact(GameBase):
         # 比如传送、打怪、提交任务等
         time.sleep(10)
         return True
-
-    def launch_bettergi(self) -> bool:
-        """
-        启动BetterGI并执行一条龙操作
-        整合BetterGI启动、新版本弹窗处理、一条龙启动全流程
-        """
-        bettergi_path = self.config.get("bettergi_path")
-        if not bettergi_path or not os.path.exists(bettergi_path):
-            logger.error(f"BetterGI路径不存在: {bettergi_path}")
-            return False
-        
-        logger.info("=== 开始启动BetterGI")
-        
-        try:
-            # 1. 启动BetterGI
-            logger.info(f"启动BetterGI: {bettergi_path}")
-            subprocess.Popen(bettergi_path)
-            
-            # 2. 等待BetterGI窗口出现
-            logger.info("等待BetterGI窗口加载...")
-            bettergi_hwnd = None
-            for _ in range(30):
-                bettergi_hwnd = win32gui.FindWindow(None, "BetterGI")
-                if bettergi_hwnd:
-                    break
-                time.sleep(1)
-            
-            if not bettergi_hwnd:
-                logger.error("等待BetterGI窗口超时")
-                return False
-            
-            # 3. 创建识别实例
-            screen_capture = ScreenCapture("BetterGI")
-            ocr = OCRRecognizer(use_gpu=self.config.get('use_gpu', True))
-            input_controller = InputController(click_delay=0.2)
-            
-            def click_button(text: str, timeout: int = 10) -> bool:
-                """通过文本识别点击按钮"""
-                start_time = time.time()
-                while time.time() - start_time < timeout:
-                    img = screen_capture.capture()
-                    res = ocr.find_text(img, text, threshold=0.8)
-                    if res:
-                        x, y = res['center']
-                        left, top, _, _ = win32gui.GetWindowRect(bettergi_hwnd)
-                        screen_x = int(left + x)
-                        screen_y = int(top + y)
-                        input_controller.click(screen_x, screen_y)
-                        logger.info(f"点击按钮成功: [{text}] 位置: ({screen_x}, {screen_y})")
-                        return True
-                    time.sleep(0.5)
-                logger.error(f"未找到按钮: [{text}]")
-                return False
-            
-            # 4. 处理新版本弹窗
-            logger.info("检查新版本弹窗...")
-            update_buttons = ["取消", "稍后", "跳过", "知道了"]
-            for btn_text in update_buttons:
-                if click_button(btn_text, timeout=3):
-                    logger.info(f"新版本弹窗已处理，点击了: [{btn_text}]")
-                    break
-            time.sleep(1)
-            
-            # 5. 点击启动按钮
-            logger.info("点击启动按钮")
-            if not click_button("启动", timeout=10):
-                if not click_button("启动游戏", timeout=5):
-                    logger.error("未找到启动按钮")
-                    return False
-            logger.info("原神启动中...")
-            
-            # 6. 等待原神窗口出现
-            logger.info("等待原神窗口出现...")
-            genshin_hwnd = None
-            start_wait = time.time()
-            while time.time() - start_wait < 300:  # 最多等5分钟
-                genshin_hwnd = win32gui.FindWindow(None, "原神")
-                if genshin_hwnd and win32gui.IsWindowVisible(genshin_hwnd):
-                    logger.info("原神窗口已出现，等待游戏进入主界面...")
-                    break
-                time.sleep(5)
-            
-            if not genshin_hwnd:
-                logger.error("等待原神窗口超时")
-                return False
-            
-            # 7. 等待原神加载完成
-            time.sleep(30)
-            logger.info("原神已进入游戏，切回BetterGI窗口")
-            
-            # 8. 重新激活BetterGI窗口
-            bettergi_hwnd = win32gui.FindWindow(None, "BetterGI")
-            if not bettergi_hwnd:
-                logger.error("未找到BetterGI窗口")
-                return False
-            win32gui.SetForegroundWindow(bettergi_hwnd)
-            time.sleep(2)
-            
-            # 9. 点击一条龙按钮
-            logger.info("点击一条龙按钮")
-            if not click_button("一条龙", timeout=10):
-                if not click_button("日常任务", timeout=5):
-                    if not click_button("自动任务", timeout=5):
-                        logger.error("未找到一条龙/日常任务按钮")
-                        return False
-            
-            time.sleep(1)
-            
-            # 10. 点击执行按钮
-            logger.info("点击任务执行按钮")
-            exec_buttons = ["▶", "▶️", "执行", "开始", "运行", "启动"]
-            for btn_text in exec_buttons:
-                if click_button(btn_text, timeout=10):
-                    logger.info(f"成功点击执行按钮: [{btn_text}]")
-                    break
-            else:
-                logger.error("未找到执行按钮")
-                return False
-            
-            logger.info("✅ BetterGI一条龙任务已成功启动！")
-            return True
-            
-        except Exception as e:
-            logger.error(f"启动BetterGI失败: {str(e)}")
-            return False
