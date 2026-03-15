@@ -5,10 +5,10 @@ import subprocess
 import os
 from typing import List, Dict, Callable, Optional, Any
 from loguru import logger
-from screen_capture import ScreenCapture
-from ocr_recognizer import OCRRecognizer
-from input_controller import InputController
-from retry_manager import RetryManager
+from .screen_capture import ScreenCapture
+from .ocr_recognizer import OCRRecognizer
+from .input_controller import InputController
+from .retry_manager import RetryManager
 
 
 class GameBase:

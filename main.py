@@ -8,11 +8,11 @@ import sys
 import time
 from loguru import logger
 from logging_config import setup_logging
-from config import Config
+from src.config import Config
 from games.genshin import GenshinImpact
 from games.zzz import ZenlessZoneZero, ZZZMultiApp
-from telegram_notifier import TelegramNotifier
-from shutdown import shutdown
+from src.utils import TelegramNotifier
+from src.core import shutdown
 
 # 配置日志
 setup_logging()

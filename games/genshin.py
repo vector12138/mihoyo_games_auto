@@ -2,12 +2,9 @@ import time
 import win32gui
 import subprocess
 import os
-from game_base import GameBase
+from src.core import GameBase, ScreenCapture, OCRRecognizer, InputController
 from typing import Dict
 from loguru import logger
-from screen_capture import ScreenCapture
-from ocr_recognizer import OCRRecognizer
-from input_controller import InputController
 
 
 class GenshinImpact(GameBase):

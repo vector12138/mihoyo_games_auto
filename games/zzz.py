@@ -1,5 +1,5 @@
 import time
-from game_base import GameBase, MultiAppBase
+from src.core import GameBase, MultiAppBase
 from typing import Dict
 from loguru import logger
 
