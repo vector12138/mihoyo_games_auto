@@ -1,11 +1,7 @@
 from paddleocr import PaddleOCR
 import numpy as np
-from typing import List, Tuple, Dict, Optional
+from typing import List, Dict, Optional
 from loguru import logger
-import cv2
-import os
-import time
-from ..utils import get_prj_root
 
 class OCRRecognizer:
     """PaddleOCR封装，识别图像中的文本和位置"""
@@ -67,12 +63,7 @@ class OCRRecognizer:
                         'width': width,
                         'height': height
                     })
-                    
-        # 保存调试信息
-        if self.debug:
-            self._save_debug_info(image, recognized)
         
-        logger.debug(f"识别到{len(recognized)}个有效文本")
         return recognized
     
     def find_text(self, image: np.ndarray, target_text: str, 
@@ -94,7 +85,7 @@ class OCRRecognizer:
                 logger.info(f"找到文本: {res['text']} 位置: {res['center']} 置信度: {res['confidence']:.2f}")
                 return res
         
-        logger.debug(f"未找到文本: {target_text}")
+        logger.info(f"未找到文本: {target_text}")
         return None
     
     def find_all_text(self, image: np.ndarray, target_text: str, 
@@ -110,36 +101,3 @@ class OCRRecognizer:
                 matches.append(res)
         
         return matches
-    
-    def _save_debug_info(self, image: np.ndarray, recognized: List[Dict]):
-        """
-        保存调试信息，包括截图和识别的文本
-        :param image: 原始图像
-        :param recognized: 识别结果
-        """
-        cur_prj_path = get_prj_root()
-
-        # 创建tmp文件夹
-        tmp_dir = os.path.join(cur_prj_path, 'tmp')
-        os.makedirs(tmp_dir, exist_ok=True)
-        
-        # 生成时间戳作为文件名
-        timestamp = time.strftime('%Y%m%d_%H%M%S')
-        
-        # 保存截图
-        image_path = os.path.join(tmp_dir, f'ocr_debug_{timestamp}.png')
-        cv2.imwrite(image_path, image)
-        logger.debug(f"保存OCR调试截图到: {image_path}")
-        
-        # 保存识别的文本
-        text_path = os.path.join(tmp_dir, f'ocr_debug_{timestamp}.txt')
-        with open(text_path, 'w', encoding='utf-8') as f:
-            f.write(f"识别时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"识别到的文本数量: {len(recognized)}\n\n")
-            for i, item in enumerate(recognized, 1):
-                f.write(f"[{i}] 文本: {item['text']}\n")
-                f.write(f"   置信度: {item['confidence']:.4f}\n")
-                f.write(f"   位置: {item['center']}\n")
-                f.write(f"   边界框: {item['bbox']}\n\n")
-        
-        logger.debug(f"保存OCR调试文本到: {text_path}")

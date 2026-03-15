@@ -31,10 +31,10 @@ class ZenlessZoneZero(MultiAppBase):
     
     def _get_multi_app_steps(self) -> list:
         """获取多应用辅助模式的操作步骤"""
-        return [
-            # ========== 第一步：启动两个应用 ==========
+
+        steps = [
             {
-                'name': '启动绝区零游戏本体',
+                'name': '启动绝区零',
                 'type': 'launch_app',
                 'app_name': 'zzz_game',
                 'timeout': 60
@@ -45,52 +45,21 @@ class ZenlessZoneZero(MultiAppBase):
                 'app_name': 'zzz_onedragen',
                 'timeout': 60
             },
-            
-            # ========== 第二步：在游戏本体里领月卡 ==========
             {
-                'name': '切换到绝区零游戏窗口',
-                'type': 'switch_app',
-                'app_name': 'zzz_game'
-            },
-            {
-                'name': '等待进入游戏',
-                'type': 'wait',
-                'text': self.buttons['enter_game'],
-                'timeout': 60
-            },
-            {
-                'name': '点击进入游戏',
-                'type': 'click',
-                'text': self.buttons['enter_game']
-            },
-            {
-                'name': '等待游戏加载',
+                'name': '等待辅助窗口激活',
                 'type': 'sleep',
-                'seconds': 15
+                'seconds': 10
             },
             {
-                'name': '领取月卡奖励',
+                'name': '激活仪表盘',
                 'type': 'click',
-                'text': self.buttons['claim_all'],
+                'text': '仪表',
                 'timeout': 10
-            },
-            {
-                'name': '确认领取',
-                'type': 'click',
-                'text': self.buttons['confirm'],
-                'timeout': 5
-            },
-            
-            # ========== 第三步：切换到辅助工具启动一条龙 ==========
-            {
-                'name': '切换到zzz-onedragen辅助窗口',
-                'type': 'switch_app',
-                'app_name': 'zzz_onedragen'
             },
             {
                 'name': '等待辅助窗口激活',
                 'type': 'sleep',
-                'seconds': 2
+                'seconds': 10
             },
             {
                 'name': '点击一条龙按钮',
@@ -98,25 +67,37 @@ class ZenlessZoneZero(MultiAppBase):
                 'text': self.buttons['daily_task'],
                 'timeout': 10
             },
-            
-            # ========== 第四步：等待任务执行 ==========
             {
-                'name': '等待一条龙任务执行完成（30分钟）',
+                'name': '等待一条龙任务执行完成（10分钟）',
                 'type': 'sleep',
-                'seconds': 1800  # 可根据实际情况调整时间
+                'seconds': 600  # 可根据实际情况调整时间
             },
-            
-            # ========== 第五步：关闭两个应用 ==========
             {
+                'name': '切换到绝区零游戏窗口',
+                'type': 'switch_app',
+                'app_name': 'zzz_game'
+            },
+            {
+                'name': "检测一条龙是否运行完成",
+                'type': 'wait',
+                'text': '个人主页',
+                'interval': 10,
+                'timeout': 1800  # 可根据实际情况调整时间
+            }
+        ]
+
+        if self.config.get('auto_close', True):
+            steps.append({
                 'name': '关闭绝区零游戏',
                 'type': 'close_app',
                 'app_name': 'zzz_game',
                 'force': True
-            },
-            {
+            })
+            steps.append({
                 'name': '关闭zzz-onedragen辅助工具',
                 'type': 'close_app',
                 'app_name': 'zzz_onedragen',
                 'force': True
-            }
-        ]
+            })
+        
+        return steps

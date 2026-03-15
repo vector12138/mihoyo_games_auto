@@ -103,17 +103,17 @@ class MultiAppBase:
         window_title = app_config.get('window_title')
         
         if not app_path or not os.path.exists(app_path):
-            logger.error(f"应用[{app_name}]路径不存在: {app_path}")
+            logger.error(f"应用[{window_title}]路径不存在: {app_path}")
             return False
         
         if not window_title:
-            logger.error(f"应用[{app_name}]未配置窗口标题")
+            logger.error(f"应用[{window_title}]未配置窗口标题")
             return False
         
         # 检查是否已经运行
         hwnd = win32gui.FindWindow(None, window_title)
         if hwnd:
-            logger.info(f"应用[{app_name}]已经在运行，直接激活")
+            logger.info(f"应用[{window_title}]已经在运行，直接激活")
             self.app_states[app_name] = {
                 'hwnd': hwnd,
                 'window_title': window_title,
@@ -122,15 +122,15 @@ class MultiAppBase:
             return self.switch_app(app_name)
         
         # 启动应用
-        logger.info(f"启动应用[{app_name}]: {app_path}")
+        logger.info(f"启动应用[{window_title}]: {app_path}")
         try:
             subprocess.Popen(app_path)
         except Exception as e:
-            logger.error(f"启动应用[{app_name}]失败: {str(e)}")
+            logger.error(f"启动应用[{window_title}]失败: {str(e)}")
             return False
         
         # 等待窗口出现
-        logger.info(f"等待应用[{app_name}]窗口加载...")
+        logger.info(f"等待应用[{window_title}]窗口加载...")
         start_time = time.time()
         while time.time() - start_time < timeout:
             hwnd = win32gui.FindWindow(None, window_title)
@@ -140,11 +140,11 @@ class MultiAppBase:
                     'window_title': window_title,
                     'running': True
                 }
-                logger.info(f"应用[{app_name}]启动成功")
+                logger.info(f"应用[{window_title}]启动成功")
                 return self.switch_app(app_name)
             time.sleep(1)
         
-        logger.error(f"等待应用[{app_name}]窗口超时")
+        logger.error(f"等待应用[{window_title}]窗口超时")
         return False
     
     def switch_app(self, app_name: str) -> bool:
@@ -171,10 +171,10 @@ class MultiAppBase:
             # 更新当前应用和截图实例
             self.active_app = app_name
             self.active_capture = ScreenCapture(window_title)
-            logger.info(f"切换到应用[{app_name}]成功")
+            logger.info(f"切换到应用[{window_title}]成功")
             return True
         except Exception as e:
-            logger.error(f"切换到应用[{app_name}]失败: {str(e)}")
+            logger.error(f"切换到应用[{window_title}]失败: {str(e)}")
             return False
     
     def close_app(self, app_name: str, force: bool = False) -> bool:
@@ -184,8 +184,10 @@ class MultiAppBase:
         :param force: 是否强制关闭
         :return: 是否关闭成功
         """
+        window_title = self.apps_config[app_name].get('window_title')
+
         if app_name not in self.app_states or not self.app_states[app_name]['running']:
-            logger.info(f"应用[{app_name}]未运行，无需关闭")
+            logger.info(f"应用[{window_title}]未运行，无需关闭")
             return True
         
         app_state = self.app_states[app_name]
@@ -210,10 +212,10 @@ class MultiAppBase:
                 self.active_app = None
                 self.active_capture = None
             
-            logger.info(f"应用[{app_name}]已关闭")
+            logger.info(f"应用[{window_title}]已关闭")
             return True
         except Exception as e:
-            logger.error(f"关闭应用[{app_name}]失败: {str(e)}")
+            logger.error(f"关闭应用[{window_title}]失败: {str(e)}")
             return False
     
     def wait_for_text(self, target_text: str, timeout: int = 10, 
@@ -235,13 +237,13 @@ class MultiAppBase:
         return None
     
     def click_text(self, target_text: str, timeout: int = 10, 
-                  threshold: float = 0.8, double: bool = False) -> bool:
+                  threshold: float = 0.8, double: bool = False, interval: float = 0.5) -> bool:
         """点击当前应用中的指定文本"""
         if not self.active_capture or not self.active_app:
             logger.error("没有活跃应用，请先切换到对应应用")
             return False
         
-        res = self.wait_for_text(target_text, timeout, threshold)
+        res = self.wait_for_text(target_text, timeout, threshold, interval)
         if not res:
             logger.error(f"点击失败，未找到文本: {target_text}")
             return False
@@ -290,12 +292,14 @@ class MultiAppBase:
                 return self.click_text(
                     step['text'], 
                     timeout=step.get('timeout', 10),
-                    double=step.get('double', False)
+                    double=step.get('double', False),
+                    interval=step.get('interval', 0.5)
                 )
             elif step_type == 'wait':
                 return self.wait_for_text(
                     step['text'],
-                    timeout=step.get('timeout', 10)
+                    timeout=step.get('timeout', 10),
+                    interval=step.get('interval', 0.5)
                 ) is not None
             elif step_type == 'sleep':
                 time.sleep(step.get('seconds', 1))
@@ -328,7 +332,7 @@ class MultiAppBase:
             
             if not result:
                 logger.error(f"任务失败，第{i}步执行失败")
-                return False
+                continue
             
             success_count += 1
         
