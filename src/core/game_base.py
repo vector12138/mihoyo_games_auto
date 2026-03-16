@@ -2,6 +2,9 @@ import time
 import win32gui
 import win32con
 import subprocess
+import win32api
+import win32process
+import ctypes
 import os
 from typing import List, Dict, Callable, Optional, Any
 from loguru import logger
@@ -9,15 +12,6 @@ from .screen_capture import ScreenCapture
 from .ocr_recognizer import OCRRecognizer
 from .input_controller import InputController
 from .retry_manager import RetryManager
-from ..utils.telegram_notifier import TelegramNotifier
-
-
-import win32api
-import win32process
-import ctypes
-
-# 第一步：设置系统权限（允许设置前台窗口）
-
 
 class MultiAppBase:
     """多应用切换自动化基类，适用于需要多个软件配合的场景"""
@@ -42,9 +36,6 @@ class MultiAppBase:
             type_delay=global_config.get('type_delay', 0.05)
         )
         self.retry_manager = RetryManager(global_config)
-        
-        # 初始化通知器
-        self.telegram_notifier = TelegramNotifier(global_config.get('telegram', {}))
         
         # 应用状态管理
         self.app_states: Dict[str, Dict[str, Any]] = {}  # 每个应用的状态
@@ -284,179 +275,6 @@ class MultiAppBase:
         logger.info(f"点击文本成功: [{target_text}] 位置: ({screen_x}, {screen_y})")
         return True
     
-    def execute_step(self, step: Dict) -> bool:
-        """
-        执行单个操作步骤，支持多应用相关步骤
-        新增步骤类型:
-        - launch_app: 启动应用 {"type": "launch_app", "app_name": "应用名", "timeout": 30}
-        - switch_app: 切换应用 {"type": "switch_app", "app_name": "应用名"}
-        - close_app: 关闭应用 {"type": "close_app", "app_name": "应用名", "force": false}
-        - click/wait/sleep/press/hotkey/custom
-        """
-        step_type = step.get('type')
-        step_name = step.get('name', f'未命名步骤({step_type})')
-        logger.info(f"执行步骤: {step_name}")
-        
-        try:
-            # 多应用专属步骤
-            if step_type == 'launch_app':
-                return self.launch_app(step['app_name'], timeout=step.get('timeout', 30))
-            
-            elif step_type == 'switch_app':
-                return self.switch_app(step['app_name'])
-            
-            elif step_type == 'close_app':
-                return self.close_app(step['app_name'], force=step.get('force', False))
-            
-            # 通用操作步骤，需要当前有活跃应用
-            if not self.active_app:
-                logger.error("执行操作步骤前请先切换到对应应用")
-                return False
-            
-            if step_type == 'click':
-                return self.click_text(
-                    step['text'], 
-                    timeout=step.get('timeout', 10),
-                    double=step.get('double', False),
-                    interval=step.get('interval', 0.5)
-                )
-            elif step_type == 'wait':
-                return self.wait_for_text(
-                    step['text'],
-                    timeout=step.get('timeout', 10),
-                    interval=step.get('interval', 0.5)
-                ) is not None
-            elif step_type == 'sleep':
-                time.sleep(step.get('seconds', 1))
-                return True
-            elif step_type == 'press':
-                self.input_controller.press_key(step['key'])
-                return True
-            elif step_type == 'hotkey':
-                self.input_controller.hotkey(*step['keys'])
-                return True
-            elif step_type == 'custom':
-                func = getattr(self, step['func'])
-                return func()
-            
-            # 新增Win32消息/控件操作步骤
-            elif step_type == 'send_app_message':
-                return self.send_app_message(
-                    step['msg'],
-                    wparam=step.get('wparam', 0),
-                    lparam=step.get('lparam', 0),
-                    app_name=step.get('app_name'),
-                    use_post=step.get('use_post', False)
-                )
-            elif step_type == 'send_app_key':
-                return self.send_app_key(
-                    step['key_code'],
-                    app_name=step.get('app_name'),
-                    press=step.get('press', True)
-                )
-            elif step_type == 'find_control':
-                control_hwnd = self.find_child_control(
-                    app_name=step.get('app_name'),
-                    class_name=step.get('class_name'),
-                    window_title=step.get('window_title'),
-                    control_id=step.get('control_id')
-                )
-                if control_hwnd:
-                    # 保存找到的控件句柄到step_result，供后续步骤使用
-                    step['_result'] = control_hwnd
-                    return True
-                return False
-            elif step_type == 'send_control_message':
-                # 支持直接传入control_hwnd或者从之前步骤获取
-                control_hwnd = step.get('control_hwnd') or step.get('_previous_result')
-                if not control_hwnd:
-                    logger.error("未指定控件句柄，且无前置步骤结果")
-                    return False
-                return self.send_control_message(
-                    control_hwnd,
-                    step['msg'],
-                    wparam=step.get('wparam', 0),
-                    lparam=step.get('lparam', 0),
-                    use_post=step.get('use_post', False)
-                )
-            elif step_type == 'set_control_text':
-                control_hwnd = step.get('control_hwnd') or step.get('_previous_result')
-                if not control_hwnd:
-                    logger.error("未指定控件句柄，且无前置步骤结果")
-                    return False
-                return self.set_control_text(control_hwnd, step['text'])
-            elif step_type == 'click_control':
-                control_hwnd = step.get('control_hwnd') or step.get('_previous_result')
-                if not control_hwnd:
-                    logger.error("未指定控件句柄，且无前置步骤结果")
-                    return False
-                return self.click_control(control_hwnd)
-            
-            else:
-                logger.error(f"未知步骤类型: {step_type}")
-                return False
-        except Exception as e:
-            logger.error(f"步骤执行失败: {step_name} 错误: {str(e)}")
-            return False
-    
-    def run(self) -> bool:
-        """执行所有操作步骤"""
-        logger.info("开始执行多应用自动化任务")
-        success_count = 0
-        total_steps = len(self.task_steps)
-        
-        for i, step in enumerate(self.task_steps, 1):
-            logger.info(f"步骤 [{i}/{total_steps}]")
-            result = self.retry_manager.retry(lambda: self.execute_step(step))
-            
-            if not result:
-                logger.error(f"任务失败，第{i}步执行失败")
-                continue
-            
-            success_count += 1
-        
-        logger.info(f"任务执行完成，成功{success_count}/{total_steps}步")
-        return True
-    
-    def send_message(self, text: str, parse_mode: str = 'Markdown', disable_notification: bool = False) -> bool:
-        """
-        发送文本消息到通知渠道
-        :param text: 消息内容
-        :param parse_mode: 解析模式（Markdown/HTML）
-        :param disable_notification: 是否静默发送
-        :return: 是否发送成功
-        """
-        return self.telegram_notifier.send_message(text, parse_mode, disable_notification)
-    
-    def send_photo(self, photo_path: str, caption: str = '', disable_notification: bool = False) -> bool:
-        """
-        发送图片到通知渠道
-        :param photo_path: 图片路径
-        :param caption: 图片说明
-        :param disable_notification: 是否静默发送
-        :return: 是否发送成功
-        """
-        return self.telegram_notifier.send_photo(photo_path, caption, disable_notification)
-    
-    def notify_task_status(self, task_name: str, status: str, duration: float = 0, error_msg: str = '') -> bool:
-        """
-        快捷发送任务状态通知
-        :param task_name: 任务名称
-        :param status: 状态：start/complete/success/fail/error
-        :param duration: 耗时（秒）
-        :param error_msg: 错误信息（失败时必填）
-        :return: 是否发送成功
-        """
-        if status == 'start':
-            return self.telegram_notifier.notify_task_start(task_name)
-        elif status == 'complete' or status == 'success':
-            return self.telegram_notifier.notify_task_complete(task_name, duration, success=True)
-        elif status == 'fail' or status == 'error':
-            return self.telegram_notifier.notify_task_error(task_name, error_msg)
-        else:
-            logger.warning(f"未知的通知状态: {status}")
-            return False
-    
     def send_app_message(self, msg: int, wparam: int = 0, lparam: int = 0, 
                         app_name: Optional[str] = None, use_post: bool = False) -> bool:
         """
@@ -621,3 +439,139 @@ class MultiAppBase:
         """
         # 发送BM_CLICK消息点击按钮
         return self.send_control_message(control_hwnd, win32con.BM_CLICK, 0, 0, use_post=True)
+    
+    def execute_step(self, step: Dict) -> bool:
+        """
+        执行单个操作步骤，支持多应用相关步骤
+        新增步骤类型:
+        - launch_app: 启动应用 {"type": "launch_app", "app_name": "应用名", "timeout": 30}
+        - switch_app: 切换应用 {"type": "switch_app", "app_name": "应用名"}
+        - close_app: 关闭应用 {"type": "close_app", "app_name": "应用名", "force": false}
+        - click/wait/sleep/press/hotkey/custom
+        """
+        step_type = step.get('type')
+        step_name = step.get('name', f'未命名步骤({step_type})')
+        logger.info(f"执行步骤: {step_name}")
+        
+        try:
+            # 多应用专属步骤
+            if step_type == 'launch_app':
+                return self.launch_app(step['app_name'], timeout=step.get('timeout', 30))
+            
+            elif step_type == 'switch_app':
+                return self.switch_app(step['app_name'])
+            
+            elif step_type == 'close_app':
+                return self.close_app(step['app_name'], force=step.get('force', False))
+            
+            # 通用操作步骤，需要当前有活跃应用
+            if not self.active_app:
+                logger.error("执行操作步骤前请先切换到对应应用")
+                return False
+            
+            if step_type == 'click':
+                return self.click_text(
+                    step['text'], 
+                    timeout=step.get('timeout', 10),
+                    double=step.get('double', False),
+                    interval=step.get('interval', 0.5)
+                )
+            elif step_type == 'wait':
+                return self.wait_for_text(
+                    step['text'],
+                    timeout=step.get('timeout', 10),
+                    interval=step.get('interval', 0.5)
+                ) is not None
+            elif step_type == 'sleep':
+                time.sleep(step.get('seconds', 1))
+                return True
+            elif step_type == 'press':
+                self.input_controller.press_key(step['key'])
+                return True
+            elif step_type == 'hotkey':
+                self.input_controller.hotkey(*step['keys'])
+                return True
+            elif step_type == 'custom':
+                func = getattr(self, step['func'])
+                return func()
+            
+            # 新增Win32消息/控件操作步骤
+            elif step_type == 'send_app_message':
+                return self.send_app_message(
+                    step['msg'],
+                    wparam=step.get('wparam', 0),
+                    lparam=step.get('lparam', 0),
+                    app_name=step.get('app_name'),
+                    use_post=step.get('use_post', False)
+                )
+            elif step_type == 'send_app_key':
+                return self.send_app_key(
+                    step['key_code'],
+                    app_name=step.get('app_name'),
+                    press=step.get('press', True)
+                )
+            elif step_type == 'find_control':
+                control_hwnd = self.find_child_control(
+                    app_name=step.get('app_name'),
+                    class_name=step.get('class_name'),
+                    window_title=step.get('window_title'),
+                    control_id=step.get('control_id')
+                )
+                if control_hwnd:
+                    # 保存找到的控件句柄到step_result，供后续步骤使用
+                    step['_result'] = control_hwnd
+                    return True
+                return False
+            elif step_type == 'send_control_message':
+                # 支持直接传入control_hwnd或者从之前步骤获取
+                control_hwnd = step.get('control_hwnd') or step.get('_previous_result')
+                if not control_hwnd:
+                    logger.error("未指定控件句柄，且无前置步骤结果")
+                    return False
+                return self.send_control_message(
+                    control_hwnd,
+                    step['msg'],
+                    wparam=step.get('wparam', 0),
+                    lparam=step.get('lparam', 0),
+                    use_post=step.get('use_post', False)
+                )
+            elif step_type == 'set_control_text':
+                control_hwnd = step.get('control_hwnd') or step.get('_previous_result')
+                if not control_hwnd:
+                    logger.error("未指定控件句柄，且无前置步骤结果")
+                    return False
+                return self.set_control_text(control_hwnd, step['text'])
+            elif step_type == 'click_control':
+                control_hwnd = step.get('control_hwnd') or step.get('_previous_result')
+                if not control_hwnd:
+                    logger.error("未指定控件句柄，且无前置步骤结果")
+                    return False
+                return self.click_control(control_hwnd)
+            
+            else:
+                logger.error(f"未知步骤类型: {step_type}")
+                return False
+        except Exception as e:
+            logger.error(f"步骤执行失败: {step_name} 错误: {str(e)}")
+            return False
+    
+    def run(self) -> bool:
+        """执行所有操作步骤"""
+        logger.info("开始执行多应用自动化任务")
+        success_count = 0
+        total_steps = len(self.task_steps)
+        
+        for i, step in enumerate(self.task_steps, 1):
+            logger.info(f"步骤 [{i}/{total_steps}]")
+            result = self.retry_manager.retry(lambda: self.execute_step(step))
+            
+            if not result:
+                logger.error(f"任务失败，第{i}步执行失败")
+                continue
+            
+            success_count += 1
+        
+        logger.info(f"任务执行完成，成功{success_count}/{total_steps}步")
+        return True
+    
+    
