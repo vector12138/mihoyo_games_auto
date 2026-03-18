@@ -453,6 +453,78 @@ class MultiAppBase:
                 self.set_current_control(control)
                 return True
             
+            elif step_type == 'click_control_by_hierarchy':
+                # 层级查找控件并点击，一步完成
+                hierarchy = step.get('hierarchy', [])
+                if not hierarchy:
+                    logger.error("未指定层级查找条件")
+                    return False
+                
+                control_info = self.find_control_by_hierarchy(
+                    app_name=step.get('app_name'),
+                    hierarchy=hierarchy
+                )
+                if not control_info:
+                    return False
+                
+                return self.control_operator.click_control(
+                    control_info, 
+                    double=step.get('double', False)
+                )
+            
+            elif step_type == 'send_text_to_control_by_hierarchy':
+                # 层级查找控件并发送文本，一步完成
+                hierarchy = step.get('hierarchy', [])
+                text = step.get('text', '')
+                if not hierarchy:
+                    logger.error("未指定层级查找条件")
+                    return False
+                
+                control_info = self.find_control_by_hierarchy(
+                    app_name=step.get('app_name'),
+                    hierarchy=hierarchy
+                )
+                if not control_info:
+                    return False
+                
+                return self.control_operator.send_text_to_control(
+                    control_info, 
+                    text
+                )
+            
+            elif step_type == 'click_current_child_control':
+                # 查找当前控件的子控件并点击
+                properties = step.get('properties', {})
+                if not properties:
+                    logger.error("未指定子控件属性")
+                    return False
+                
+                control_info = self.find_child_control(properties)
+                if not control_info:
+                    return False
+                
+                return self.control_operator.click_control(
+                    control_info, 
+                    double=step.get('double', False)
+                )
+            
+            elif step_type == 'send_text_to_current_child_control':
+                # 查找当前控件的子控件并发送文本
+                properties = step.get('properties', {})
+                text = step.get('text', '')
+                if not properties:
+                    logger.error("未指定子控件属性")
+                    return False
+                
+                control_info = self.find_child_control(properties)
+                if not control_info:
+                    return False
+                
+                return self.control_operator.send_text_to_control(
+                    control_info, 
+                    text
+                )
+            
             else:
                 logger.error(f"未知步骤类型: {step_type}")
                 return False
