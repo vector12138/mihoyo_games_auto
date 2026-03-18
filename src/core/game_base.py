@@ -390,32 +390,6 @@ class MultiAppBase:
                     text=step.get('text', '')
                 )
             
-            elif step_type == 'create_and_click_control':
-                # 创建控件信息并点击（不实际查找）
-                properties = step.get('properties', {})
-                if not properties:
-                    logger.error("未指定控件属性")
-                    return False
-                
-                return self.create_and_click_control(
-                    app_name=step.get('app_name'),
-                    properties=properties,
-                    double=step.get('double', False)
-                )
-            
-            elif step_type == 'create_and_send_text_to_control':
-                # 创建控件信息并发送文本（不实际查找）
-                properties = step.get('properties', {})
-                if not properties:
-                    logger.error("未指定控件属性")
-                    return False
-                
-                return self.create_and_send_text_to_control(
-                    app_name=step.get('app_name'),
-                    properties=properties,
-                    text=step.get('text', '')
-                )
-            
             elif step_type == 'find_control_by_hierarchy':
                 # 层级查找控件
                 hierarchy = step.get('hierarchy', [])
@@ -557,50 +531,6 @@ class MultiAppBase:
             logger.error(f"未找到控件: {properties}")
             return False
         
-        return self.control_operator.send_text_to_control(control_info, text)
-    
-    def create_and_click_control(self, app_name: Optional[str] = None, properties: Dict = None, double: bool = False) -> bool:
-        """
-        创建控件信息并点击（不实际查找，直接使用提供的属性）
-        :param app_name: 应用名称，不传则使用当前活跃应用
-        :param properties: 控件属性字典
-        :param double: 是否双击
-        :return: 是否成功
-        """
-        # 确定目标应用
-        target_app = app_name or self.active_app
-        if not target_app:
-            logger.error("未指定应用且当前无活跃应用，请传入app_name参数")
-            return False
-        
-        if target_app not in self.app_states or not self.app_states[target_app]['running']:
-            logger.error(f"应用[{target_app}]未运行，请先启动")
-            return False
-        
-        hwnd = self.app_states[target_app]['hwnd']
-        control_info = self.control_operator.create_control_from_properties(hwnd, properties)
-        return self.control_operator.click_control(control_info, double)
-    
-    def create_and_send_text_to_control(self, app_name: Optional[str] = None, properties: Dict = None, text: str = "") -> bool:
-        """
-        创建控件信息并发送文本（不实际查找，直接使用提供的属性）
-        :param app_name: 应用名称，不传则使用当前活跃应用
-        :param properties: 控件属性字典
-        :param text: 要发送的文本
-        :return: 是否成功
-        """
-        # 确定目标应用
-        target_app = app_name or self.active_app
-        if not target_app:
-            logger.error("未指定应用且当前无活跃应用，请传入app_name参数")
-            return False
-        
-        if target_app not in self.app_states or not self.app_states[target_app]['running']:
-            logger.error(f"应用[{target_app}]未运行，请先启动")
-            return False
-        
-        hwnd = self.app_states[target_app]['hwnd']
-        control_info = self.control_operator.create_control_from_properties(hwnd, properties)
         return self.control_operator.send_text_to_control(control_info, text)
     
     # ===================== 层级查找功能封装 =====================
