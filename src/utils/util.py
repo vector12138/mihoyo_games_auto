@@ -1,5 +1,6 @@
 import os
 import ctypes
+import sys
 from typing import Optional
 
 def get_prj_root()->str:
@@ -27,4 +28,31 @@ def is_running_as_admin() -> bool:
         return ctypes.windll.shell32.IsUserAnAdmin() != 0
     except:
         # 非Windows平台或其他错误，默认返回False
+        return False
+
+def run_as_admin(args: Optional[list] = None) -> bool:
+    """
+    以管理员权限重新启动当前脚本（仅Windows平台）
+    :param args: 启动参数，不传则使用当前脚本的参数
+    :return: 成功发起重新启动返回True，失败返回False
+    """
+    if is_running_as_admin():
+        return True
+    
+    if args is None:
+        args = sys.argv
+    
+    try:
+        # 以管理员权限重新启动脚本
+        ctypes.windll.shell32.ShellExecuteW(
+            None,
+            "runas",
+            sys.executable,
+            " ".join(f'"{arg}"' for arg in args),
+            None,
+            1  # 显示窗口
+        )
+        sys.exit(0)
+    except Exception as e:
+        print(f"请求管理员权限失败: {str(e)}")
         return False
