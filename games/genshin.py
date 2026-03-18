@@ -25,7 +25,7 @@ class GenshinImpact(MultiAppBase):
             'exit': '退出游戏'
         }
         
-        self.task_steps = self._get_bettergi_steps()
+        self.task_steps = self._get_bettergi_steps_by_uia()
     
     def _get_bettergi_steps(self) -> list:
         """获取BetterGI模式的操作步骤"""
@@ -113,5 +113,83 @@ class GenshinImpact(MultiAppBase):
                 'type': 'close_app',
                 'app_name': 'bettergi',
                 'force': True
+            }
+        ]
+
+    def _get_bettergi_steps_by_uia(self) -> list:
+        """获取BetterGI模式的操作步骤"""
+        return [
+            # 第一步：启动BetterGI
+            {
+                'name': '启动BetterGI工具',
+                'type': 'launch_app',
+                'app_name': 'bettergi',
+                'timeout': 30
+            },
+            {
+                'name': '启动原神游戏',
+                'type': 'launch_app',
+                'app_name': 'genshin_game',
+                'timeout': 30
+            },{
+                'name': '检测是否有新版本弹窗',
+                'type': 'launch_app',
+                'app_name': 'bettergi_pop',
+                'timeout': 30
+            },
+            # 第二步：处理新版本弹窗
+            {
+                'name': '处理新版本弹窗',
+                'type': 'close_app',
+                'app_name': 'bettergi_pop'
+            },
+            # 第三步：启动原神
+            {
+                'name': '切换回BetterGI窗口',
+                'type': 'switch_app',
+                'app_name': 'bettergi'
+            },
+            {
+                'name': '点击一条龙按钮',
+                'type': 'create_and_click_control',
+                'properties': {'source': 'uia','name': '一条龙', 'class_name': 'TextBlock', 'control_type': 'TextControl'},
+                'timeout': 10
+            },
+            {
+                'name': '点击运行按钮',
+                'type': 'create_and_click_control',
+                'properties': {'source': 'uia','name': '\uF606', 'class_name': 'TextBlock', 'control_type': 'TextControl'},
+                'timeout': 10
+            },
+            # 第五步：等待任务完成
+            {
+                'name': '等待一条龙任务完成（10分钟）',
+                'type': 'sleep',
+                'seconds': 600
+            },
+            {
+                'name': '切换回原神本体',
+                'type': 'switch_app',
+                'app_name': 'genshin_game',
+                'timeout': 10
+            },
+            {
+                'name': "等待结束运行文本出现",
+                'type': 'wait',
+                'text': '任务完成',
+                'timeout': 1800
+            },
+            # 第六步：关闭应用
+            {
+                'name': '关闭原神游戏',
+                'type': 'close_app',
+                'app_name': 'genshin_game',
+                'force': False
+            },
+            {
+                'name': '关闭BetterGI工具',
+                'type': 'close_app',
+                'app_name': 'bettergi',
+                'force': False
             }
         ]

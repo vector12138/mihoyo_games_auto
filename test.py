@@ -16,6 +16,8 @@ import cv2
 from loguru import logger
 from src.core.ocr_recognizer import OCRRecognizer
 from src.config.logging_config import setup_logging
+from src.core.game_base import MultiAppBase
+import uiautomation as auto
 
 # 配置日志
 setup_logging(log_level="DEBUG")
@@ -77,8 +79,53 @@ def test_capture():
 
         time.sleep(1)
 
+def test_game_base():
+    """
+    test_game_base
+    """
+    logger.info("测试原神游戏操作")
+    
+    class TestGameBase(MultiAppBase):
+        def __init__(self, config, global_config):
+            super().__init__(config, global_config)
+
+            self.app_name = 'genshin_game'
+            self.task_steps = [
+                {
+                    'name': '启动BetterGI工具',
+                    'type': 'launch_app',
+                    'app_name': 'bettergi',
+                    'timeout': 30
+                },{
+                    'name': '点击一条龙按钮',
+                    'type': 'create_and_click_control',
+                    'properties': {'source': 'uia','name': '一条龙', 'class_name': 'TextBlock', 'control_type': 'TextControl'},
+                    'timeout': 10
+                },
+                {
+                    'name': '点击运行按钮',
+                    'type': 'create_and_click_control',
+                    'properties': {'source': 'uia','name': '\uF606', 'class_name': 'TextBlock', 'control_type': 'TextControl'},
+                    'timeout': 10
+                }
+            ]
+            
+    config = {
+        'apps': {
+            'bettergi': {
+                'app_name': 'bettergi',
+                'window_title': '更好的原神',
+                'app_path': 'G:\\software\\windows\\BetterGI\\BetterGI.exe'
+            }
+        }
+    }
+
+    test_game_base = TestGameBase(config, {})
+
+    test_game_base.run()
+
 if __name__ == "__main__":
-    sw = 2
+    sw = 3
     if sw == 1:
         test_capture()
     elif sw == 2:
@@ -86,3 +133,5 @@ if __name__ == "__main__":
         image_path = os.path.join(cur_prj_path+'\\tmp', "test.png")
 
         test_ocr(image_path)
+    elif sw == 3:
+        test_game_base()
