@@ -9,7 +9,6 @@ from .screen_capture import ScreenCapture
 from .ocr_recognizer import OCRRecognizer
 from .input_controller import InputController
 from .retry_manager import RetryManager
-from ..utils.telegram_notifier import TelegramNotifier
 
 
 import win32api
@@ -45,9 +44,6 @@ class MultiAppBase:
         
         # 控件操作器
         self.control_operator = ControlOperator(global_config.get('control_operator', {}))
-        
-        # 初始化通知器
-        self.telegram_notifier = TelegramNotifier(global_config.get('telegram', {}))
         
         # 应用状态管理
         self.app_states: Dict[str, Dict[str, Any]] = {}  # 每个应用的状态
@@ -445,45 +441,6 @@ class MultiAppBase:
         
         logger.info(f"任务执行完成，成功{success_count}/{total_steps}步")
         return True
-    
-    def send_message(self, text: str, parse_mode: str = 'Markdown', disable_notification: bool = False) -> bool:
-        """
-        发送文本消息到通知渠道
-        :param text: 消息内容
-        :param parse_mode: 解析模式（Markdown/HTML）
-        :param disable_notification: 是否静默发送
-        :return: 是否发送成功
-        """
-        return self.telegram_notifier.send_message(text, parse_mode, disable_notification)
-    
-    def send_photo(self, photo_path: str, caption: str = '', disable_notification: bool = False) -> bool:
-        """
-        发送图片到通知渠道
-        :param photo_path: 图片路径
-        :param caption: 图片说明
-        :param disable_notification: 是否静默发送
-        :return: 是否发送成功
-        """
-        return self.telegram_notifier.send_photo(photo_path, caption, disable_notification)
-    
-    def notify_task_status(self, task_name: str, status: str, duration: float = 0, error_msg: str = '') -> bool:
-        """
-        快捷发送任务状态通知
-        :param task_name: 任务名称
-        :param status: 状态：start/complete/success/fail/error
-        :param duration: 耗时（秒）
-        :param error_msg: 错误信息（失败时必填）
-        :return: 是否发送成功
-        """
-        if status == 'start':
-            return self.telegram_notifier.notify_task_start(task_name)
-        elif status == 'complete' or status == 'success':
-            return self.telegram_notifier.notify_task_complete(task_name, duration, success=True)
-        elif status == 'fail' or status == 'error':
-            return self.telegram_notifier.notify_task_error(task_name, error_msg)
-        else:
-            logger.warning(f"未知的通知状态: {status}")
-            return False
     
     def find_control(self, app_name: Optional[str] = None, properties: Dict = None) -> Optional[ControlInfo]:
         """
