@@ -433,26 +433,6 @@ class MultiAppBase:
                     return True
                 return False
             
-            elif step_type == 'find_child_control':
-                # 在当前控件下查找子控件
-                properties = step.get('properties', {})
-                if not properties:
-                    logger.error("未指定子控件属性")
-                    return False
-                
-                control_info = self.find_child_control(properties)
-                if control_info:
-                    # 保存找到的控件信息到step_result
-                    step['_result'] = control_info
-                    return True
-                return False
-            
-            elif step_type == 'set_current_control':
-                # 设置当前控件上下文
-                control = step.get('control') or step.get('_previous_result')
-                self.set_current_control(control)
-                return True
-            
             elif step_type == 'click_control_by_hierarchy':
                 # 层级查找控件并点击，一步完成
                 hierarchy = step.get('hierarchy', [])
@@ -484,39 +464,6 @@ class MultiAppBase:
                     app_name=step.get('app_name'),
                     hierarchy=hierarchy
                 )
-                if not control_info:
-                    return False
-                
-                return self.control_operator.send_text_to_control(
-                    control_info, 
-                    text
-                )
-            
-            elif step_type == 'click_current_child_control':
-                # 查找当前控件的子控件并点击
-                properties = step.get('properties', {})
-                if not properties:
-                    logger.error("未指定子控件属性")
-                    return False
-                
-                control_info = self.find_child_control(properties)
-                if not control_info:
-                    return False
-                
-                return self.control_operator.click_control(
-                    control_info, 
-                    double=step.get('double', False)
-                )
-            
-            elif step_type == 'send_text_to_current_child_control':
-                # 查找当前控件的子控件并发送文本
-                properties = step.get('properties', {})
-                text = step.get('text', '')
-                if not properties:
-                    logger.error("未指定子控件属性")
-                    return False
-                
-                control_info = self.find_child_control(properties)
                 if not control_info:
                     return False
                 
@@ -657,18 +604,6 @@ class MultiAppBase:
         return self.control_operator.send_text_to_control(control_info, text)
     
     # ===================== 层级查找功能封装 =====================
-    def set_current_control(self, control: Optional[ControlInfo]):
-        """设置当前控件上下文"""
-        self.control_operator.set_current_control(control)
-    
-    def get_current_control(self) -> Optional[ControlInfo]:
-        """获取当前控件上下文"""
-        return self.control_operator.get_current_control()
-    
-    def find_child_control(self, properties: Dict) -> Optional[ControlInfo]:
-        """查找当前控件的子控件"""
-        return self.control_operator.find_child_control(properties)
-    
     def find_control_by_hierarchy(self, app_name: Optional[str] = None, hierarchy: List[Dict] = None) -> Optional[ControlInfo]:
         """
         层级查找控件，按照列表顺序一级一级查找，返回最后一级的控件
