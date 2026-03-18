@@ -128,7 +128,7 @@ def test_game_base():
     test_game_base.run()
 
 if __name__ == "__main__":
-    sw = 3
+    sw = 2
     if sw == 1:
         test_capture()
     elif sw == 2:

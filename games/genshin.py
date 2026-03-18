@@ -168,7 +168,7 @@ class GenshinImpact(MultiAppBase):
             {
                 'name': '等待一条龙任务完成（10分钟）',
                 'type': 'sleep',
-                'seconds': 600
+                'seconds': 60
             },
             {
                 'name': '切换回原神本体',
@@ -179,7 +179,7 @@ class GenshinImpact(MultiAppBase):
             {
                 'name': "等待结束运行文本出现",
                 'type': 'wait',
-                'text': '一条龙任务和配置组任务完成',
+                'text': '一条龙和配置组任务结束',
                 'timeout': 1800
             },
             # 第六步：关闭应用
