@@ -592,7 +592,7 @@ class ControlOperator:
             if rect:
                 control_info.rect = (rect.left, rect.top, rect.right, rect.bottom)
             control_info.is_enabled = uia_ctrl.IsEnabled
-            control_info.is_visible = uia_ctrl.IsVisible
+            control_info.is_visible = uia_ctrl.IsOffscreen == False
             return control_info
         except Exception as e:
             logger.debug(f"UIA控件转换失败: {str(e)}")
