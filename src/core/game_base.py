@@ -421,7 +421,7 @@ class MultiAppBase:
                 if not control_info:
                     return False
                 
-                return self.control_operator.click_control(
+                return self.control_operator.click(
                     control_info, 
                     double=step.get('double', False)
                 )
@@ -441,7 +441,7 @@ class MultiAppBase:
                 if not control_info:
                     return False
                 
-                return self.control_operator.send_text_to_control(
+                return self.control_operator.send_text(
                     control_info, 
                     text
                 )
@@ -501,7 +501,7 @@ class MultiAppBase:
             return None
         
         hwnd = self.app_states[target_app]['hwnd']
-        return self.control_operator.find_control_by_properties(hwnd, properties)
+        return self.control_operator.find_by_properties(hwnd, properties)
     
     def click_control_by_properties(self, app_name: Optional[str] = None, properties: Dict = None, double: bool = False) -> bool:
         """
@@ -516,7 +516,7 @@ class MultiAppBase:
             logger.error(f"未找到控件: {properties}")
             return False
         
-        return self.control_operator.click_control(control_info, double)
+        return self.control_operator.click(control_info, double)
     
     def send_text_to_control_by_properties(self, app_name: Optional[str] = None, properties: Dict = None, text: str = "") -> bool:
         """
@@ -531,7 +531,7 @@ class MultiAppBase:
             logger.error(f"未找到控件: {properties}")
             return False
         
-        return self.control_operator.send_text_to_control(control_info, text)
+        return self.control_operator.send_text(control_info, text)
     
     # ===================== 层级查找功能封装 =====================
     def find_control_by_hierarchy(self, app_name: Optional[str] = None, hierarchy: List[Dict] = None) -> Optional[ControlInfo]:
@@ -556,4 +556,4 @@ class MultiAppBase:
             return False
         
         hwnd = self.app_states[target_app]['hwnd']
-        return self.control_operator.find_control_by_hierarchy(hwnd, hierarchy)
+        return self.control_operator.find_by_hierarchy(hwnd, hierarchy)
