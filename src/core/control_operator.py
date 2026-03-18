@@ -72,6 +72,10 @@ class ControlOperator:
         
         if config:
             self.config.update(config)
+            
+        # 当前控件上下文，用于层级查找
+        self._current_control: Optional[ControlInfo] = None
+        self._current_uia_control = None  # UIA控件对象，用于子控件查找
     
     def click_control(self, control: ControlInfo, double: bool = False) -> bool:
         """
@@ -578,3 +582,140 @@ class ControlOperator:
         control_info.is_visible = properties.get('is_visible', True)
         
         return control_info
+    
+    # ===================== 层级查找功能 =====================
+    def set_current_control(self, control: Optional[ControlInfo]):
+        """
+        设置当前控件上下文，后续查找可以基于当前控件查找子控件
+        :param control: ControlInfo对象，传None清空
+        """
+        self._current_control = control
+        # 如果是UIA控件，保存原始UIA对象（如果存在）
+        if control and control.source == 'uia' and hasattr(control, '_uia_obj'):
+            self._current_uia_control = control._uia_obj
+        else:
+            self._current_uia_control = None
+    
+    def get_current_control(self) -> Optional[ControlInfo]:
+        """获取当前控件上下文"""
+        return self._current_control
+    
+    def find_child_control(self, properties: Dict) -> Optional[ControlInfo]:
+        """
+        查找当前控件的子控件
+        :param properties: 子控件属性
+        :return: 找到的子控件，找不到返回None
+        """
+        if not self._current_control:
+            logger.error("未设置当前控件，请先调用set_current_control")
+            return None
+        
+        # 如果是UIA控件，在UIA对象下查找子控件
+        if self._current_control.source == 'uia' and self._current_uia_control:
+            children = []
+            # 递归枚举UIA子控件
+            def enum_uia_children(ctrl, depth=0):
+                if depth > 5:
+                    return
+                try:
+                    for child in ctrl.GetChildren():
+                        child_info = self._uia_to_control_info(child)
+                        if child_info:
+                            # 保存原始UIA对象
+                            child_info._uia_obj = child
+                            children.append(child_info)
+                            enum_uia_children(child, depth + 1)
+                except:
+                    pass
+            
+            enum_uia_children(self._current_uia_control)
+            
+            # 匹配属性
+            for child in children:
+                if self._match_control_properties(child, properties):
+                    self.set_current_control(child)
+                    return child
+        
+        # 如果是Win32控件，枚举子窗口
+        elif self._current_control.source == 'win32' and self._current_control.hwnd != 0:
+            children = []
+            # 枚举Win32子控件
+            def enum_win32_children(child_hwnd, _):
+                child_info = ControlInfo()
+                child_info.source = "win32"
+                child_info.hwnd = child_hwnd
+                child_info.class_name = win32gui.GetClassName(child_hwnd)
+                child_info.window_text = win32gui.GetWindowText(child_hwnd)
+                child_info.control_id = win32gui.GetDlgCtrlID(child_hwnd)
+                child_info.rect = win32gui.GetWindowRect(child_hwnd)
+                child_info.parent_hwnd = self._current_control.hwnd
+                child_info.is_enabled = win32gui.IsWindowEnabled(child_hwnd)
+                child_info.is_visible = win32gui.IsWindowVisible(child_hwnd)
+                children.append(child_info)
+                return True
+            
+            win32gui.EnumChildWindows(self._current_control.hwnd, enum_win32_children, None)
+            
+            # 匹配属性
+            for child in children:
+                if self._match_control_properties(child, properties):
+                    self.set_current_control(child)
+                    return child
+        
+        logger.warning(f"未找到子控件: {properties}")
+        return None
+    
+    def find_control_by_hierarchy(self, parent_hwnd: int, hierarchy: List[Dict]) -> Optional[ControlInfo]:
+        """
+        层级查找控件，按照列表顺序一级一级查找，返回最后一级的控件
+        :param parent_hwnd: 顶级父窗口句柄
+        :param hierarchy: 层级查找条件列表，每个元素是一级的属性字典
+        :return: 最后一级找到的控件，任何一级找不到都返回None
+        """
+        # 清空当前上下文
+        self.set_current_control(None)
+        
+        for i, level_props in enumerate(hierarchy):
+            if i == 0:
+                # 第一级，在父窗口下查找
+                ctrl = self.find_control_by_properties(parent_hwnd, level_props)
+                if ctrl:
+                    self.set_current_control(ctrl)
+            else:
+                # 后续级别，在当前控件下查找子控件
+                ctrl = self.find_child_control(level_props)
+            
+            if not ctrl:
+                logger.error(f"层级查找失败，第{i+1}级未找到控件: {level_props}")
+                self.set_current_control(None)
+                return None
+        
+        # 返回最后找到的控件
+        return self.get_current_control()
+    
+    def _match_control_properties(self, control: ControlInfo, properties: Dict) -> bool:
+        """
+        匹配控件属性是否符合要求
+        :param control: 控件信息
+        :param properties: 属性字典
+        :return: 是否匹配
+        """
+        for key, value in properties.items():
+            if not value:
+                continue
+            # 通用属性
+            if key == 'source' and control.source != value:
+                return False
+            if key == 'class_name' and control.class_name != value:
+                return False
+            if key == 'window_text' and control.window_text != value:
+                return False
+            if key == 'name' and control.name != value:
+                return False
+            if key == 'control_type' and control.control_type != value:
+                return False
+            if key == 'automation_id' and control.automation_id != value:
+                return False
+            if key == 'control_id' and control.control_id != value:
+                return False
+        return True
