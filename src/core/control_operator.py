@@ -556,29 +556,6 @@ class ControlOperator:
         
         return None
     
-    def create_control_from_properties(self, hwnd: int, properties: Dict) -> ControlInfo:
-        """
-        根据属性创建控件信息对象（不实际查找，仅创建对象）
-        :param hwnd: 父窗口句柄
-        :param properties: 控件属性字典
-        :return: 控件信息对象
-        """
-        control_info = ControlInfo()
-        control_info.source = properties.get('source', 'win32')
-        control_info.hwnd = hwnd
-        control_info.class_name = properties.get('class_name', '')
-        control_info.window_text = properties.get('window_text', '')
-        control_info.name = properties.get('name', '')
-        control_info.control_type = properties.get('control_type', '')
-        control_info.automation_id = properties.get('automation_id', '')
-        control_info.control_id = properties.get('control_id', 0)
-        control_info.rect = properties.get('rect', (0, 0, 0, 0))
-        control_info.parent_hwnd = hwnd
-        control_info.is_enabled = properties.get('is_enabled', True)
-        control_info.is_visible = properties.get('is_visible', True)
-        
-        return control_info
-    
     # ===================== 层级查找功能 =====================
     def find_control_by_hierarchy(self, parent_hwnd: int, hierarchy: List[Dict]) -> Optional[ControlInfo]:
         """

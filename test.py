@@ -98,14 +98,17 @@ def test_game_base():
                     'timeout': 30
                 },{
                     'name': '点击一条龙按钮',
-                    'type': 'create_and_click_control',
+                    'type': 'click_control_by_properties',
                     'properties': {'source': 'uia','name': '一条龙', 'class_name': 'TextBlock', 'control_type': 'TextControl'},
                     'timeout': 10
                 },
                 {
                     'name': '点击运行按钮',
-                    'type': 'create_and_click_control',
-                    'properties': {'source': 'uia','name': '\uF606', 'class_name': 'TextBlock', 'control_type': 'TextControl'},
+                    'type': 'click_control_by_hierarchy',
+                    'hierarchy': [
+                        {'source': 'uia', 'class_name': 'OneDragonFlowPage', 'control_type': 'CustomControl'},
+                        {'source': 'uia','name': '\uF606', 'class_name': 'TextBlock', 'control_type': 'TextControl'}
+                    ],
                     'timeout': 10
                 }
             ]
