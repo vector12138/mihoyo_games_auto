@@ -6,52 +6,22 @@
 import os
 import sys
 import time
-import ctypes
 from loguru import logger
 from src.config.logging_config import setup_logging
 from src.config import Config
 from games.genshin import GenshinImpact
 from games.zzz import ZenlessZoneZero
 from src.utils import TelegramNotifier
+from src.utils.util import run_as_admin
 from src.core import shutdown
 
 # 配置日志
 setup_logging()
 
-# ===================== 管理员权限检测与提权 =====================
-def is_admin():
-    """检测当前脚本是否以管理员权限运行"""
-    try:
-        # Windows下检测管理员权限
-        return ctypes.windll.shell32.IsUserAnAdmin()
-    except:
-        return False
-
-def run_as_admin():
-    """以管理员权限重新启动当前脚本"""
-    # 获取当前脚本的完整路径和参数
-    script_path = sys.argv[0]
-    params = ' '.join(sys.argv[1:]) if len(sys.argv) > 1 else ''
-    
-    # 调用Windows API请求管理员权限
-    try:
-        ctypes.windll.shell32.ShellExecuteW(
-            None,                      # 父窗口句柄
-            "runas",                   # 操作类型：以管理员运行
-            sys.executable,            # Python解释器路径
-            f'"{script_path}" {params}',# 要执行的脚本路径+参数
-            None,                      # 工作目录
-            1                          # 显示窗口方式（1=正常显示）
-        )
-        sys.exit(0)  # 原普通权限进程退出
-    except Exception as e:
-        print(f"提权失败！请手动以管理员身份运行脚本。错误：{e}")
-        sys.exit(1)
-
 # 启动时检测权限，无管理员权限则自动提权
-if not is_admin():
-    print("当前无管理员权限，正在请求提升...")
-    run_as_admin()
+if not run_as_admin():
+    print("需要管理员权限才能运行！")
+    sys.exit(1)
 
 
 def main():
