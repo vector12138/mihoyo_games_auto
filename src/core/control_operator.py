@@ -545,6 +545,7 @@ class ControlOperator:
                     for child in children:
                         if self._match_control_properties(child, level_props):
                             current_ctrl = child
+                            current_ctrl.hwnd = parent_hwnd if child.hwnd == 0 else child.hwnd
                             break
                 
                 # 父控件是Win32控件，枚举子窗口查找
@@ -570,6 +571,7 @@ class ControlOperator:
                     current_ctrl = None
                     for child in children:
                         if self._match_control_properties(child, level_props):
+                            current_ctrl.hwnd = parent_hwnd if child.hwnd == 0 else child.hwnd
                             current_ctrl = child
                             break
             
