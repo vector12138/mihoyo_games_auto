@@ -2,9 +2,6 @@ import time
 import win32gui
 import win32con
 import subprocess
-import win32api
-import win32process
-import ctypes
 import os
 from typing import List, Dict, Callable, Optional, Any
 from loguru import logger
@@ -12,6 +9,15 @@ from .screen_capture import ScreenCapture
 from .ocr_recognizer import OCRRecognizer
 from .input_controller import InputController
 from .retry_manager import RetryManager
+from ..utils.telegram_notifier import TelegramNotifier
+
+
+import win32api
+import win32process
+import ctypes
+from .control_operator import ControlOperator, ControlInfo
+
+# 第一步：设置系统权限（允许设置前台窗口）
 
 class MultiAppBase:
     """多应用切换自动化基类，适用于需要多个软件配合的场景"""
@@ -36,6 +42,12 @@ class MultiAppBase:
             type_delay=global_config.get('type_delay', 0.05)
         )
         self.retry_manager = RetryManager(global_config)
+        
+        # 控件操作器
+        self.control_operator = ControlOperator(global_config.get('control_operator', {}))
+        
+        # 初始化通知器
+        self.telegram_notifier = TelegramNotifier(global_config.get('telegram', {}))
         
         # 应用状态管理
         self.app_states: Dict[str, Dict[str, Any]] = {}  # 每个应用的状态
@@ -275,171 +287,6 @@ class MultiAppBase:
         logger.info(f"点击文本成功: [{target_text}] 位置: ({screen_x}, {screen_y})")
         return True
     
-    def send_app_message(self, msg: int, wparam: int = 0, lparam: int = 0, 
-                        app_name: Optional[str] = None, use_post: bool = False) -> bool:
-        """
-        给指定应用发送Win32 API消息
-        :param msg: 消息类型，如win32con.WM_CLOSE/WM_KEYDOWN等
-        :param wparam: WPARAM参数
-        :param lparam: LPARAM参数
-        :param app_name: 应用名称，不传则使用当前活跃应用
-        :param use_post: 是否使用PostMessage（异步，不等待返回），默认SendMessage（同步）
-        :return: 是否发送成功
-        """
-        # 确定目标应用
-        target_app = app_name or self.active_app
-        if not target_app:
-            logger.error("未指定应用且当前无活跃应用，请传入app_name参数")
-            return False
-        
-        if target_app not in self.app_states or not self.app_states[target_app]['running']:
-            logger.error(f"应用[{target_app}]未运行，请先启动")
-            return False
-        
-        hwnd = self.app_states[target_app]['hwnd']
-        window_title = self.app_states[target_app]['window_title']
-        
-        try:
-            if use_post:
-                # 异步发送，不等待返回
-                win32gui.PostMessage(hwnd, msg, wparam, lparam)
-                logger.debug(f"异步发送Win32消息成功: 应用[{window_title}] 消息: 0x{msg:X} wparam: {wparam} lparam: {lparam}")
-            else:
-                # 同步发送，等待返回结果
-                result = win32gui.SendMessage(hwnd, msg, wparam, lparam)
-                logger.debug(f"同步发送Win32消息成功: 应用[{window_title}] 消息: 0x{msg:X} 返回值: {result}")
-            
-            return True
-        except Exception as e:
-            logger.error(f"发送Win32消息失败: 应用[{window_title}] 错误: {str(e)}")
-            return False
-    
-    def send_app_key(self, key_code: int, app_name: Optional[str] = None, press: bool = True) -> bool:
-        """
-        给应用发送键盘按键消息
-        :param key_code: 按键码，如win32con.VK_RETURN/VK_SPACE等
-        :param app_name: 应用名称，不传则使用当前活跃应用
-        :param press: True为按下（WM_KEYDOWN），False为松开（WM_KEYUP）
-        :return: 是否发送成功
-        """
-        msg = win32con.WM_KEYDOWN if press else win32con.WM_KEYUP
-        return self.send_app_message(msg, wparam=key_code, lparam=0, app_name=app_name, use_post=True)
-    
-    def close_app_by_message(self, app_name: Optional[str] = None, force: bool = False) -> bool:
-        """
-        通过发送WM_CLOSE消息关闭应用（替代之前的关闭方法，更稳定）
-        :param app_name: 应用名称，不传则使用当前活跃应用
-        :param force: 是否强制关闭（发送WM_DESTROY）
-        :return: 是否发送成功
-        """
-        msg = win32con.WM_DESTROY if force else win32con.WM_CLOSE
-        return self.send_app_message(msg, app_name=app_name, use_post=True)
-    
-    def find_child_control(self, app_name: Optional[str] = None, 
-                          class_name: Optional[str] = None, 
-                          window_title: Optional[str] = None,
-                          control_id: Optional[int] = None) -> Optional[int]:
-        """
-        查找应用内的子控件句柄
-        :param app_name: 应用名称，不传则使用当前活跃应用
-        :param class_name: 控件类名（如"Edit"、"Button"）
-        :param window_title: 控件标题/文本
-        :param control_id: 控件ID（可通过Spy++等工具获取）
-        :return: 找到的控件句柄，找不到返回None
-        """
-        # 确定目标应用
-        target_app = app_name or self.active_app
-        if not target_app:
-            logger.error("未指定应用且当前无活跃应用，请传入app_name参数")
-            return None
-        
-        if target_app not in self.app_states or not self.app_states[target_app]['running']:
-            logger.error(f"应用[{target_app}]未运行，请先启动")
-            return None
-        
-        parent_hwnd = self.app_states[target_app]['hwnd']
-        found_hwnd = None
-        
-        def enum_child_callback(hwnd, _):
-            nonlocal found_hwnd
-            # 按控件ID匹配
-            if control_id is not None:
-                current_id = win32gui.GetDlgCtrlID(hwnd)
-                if current_id == control_id:
-                    found_hwnd = hwnd
-                    return False  # 停止枚举
-            # 按类名和标题匹配
-            match = True
-            if class_name is not None:
-                current_class = win32gui.GetClassName(hwnd)
-                if current_class != class_name:
-                    match = False
-            if window_title is not None:
-                current_title = win32gui.GetWindowText(hwnd)
-                if current_title != window_title:
-                    match = False
-            if match:
-                found_hwnd = hwnd
-                return False  # 停止枚举
-            return True
-        
-        try:
-            win32gui.EnumChildWindows(parent_hwnd, enum_child_callback, None)
-            if found_hwnd:
-                logger.debug(f"找到子控件: 句柄=0x{found_hwnd:X} 类名={win32gui.GetClassName(found_hwnd)} 标题={win32gui.GetWindowText(found_hwnd)}")
-            else:
-                logger.warning(f"未找到子控件: 类名={class_name} 标题={window_title} ID={control_id}")
-            return found_hwnd
-        except Exception as e:
-            logger.error(f"查找子控件失败: {str(e)}")
-            return None
-    
-    def send_control_message(self, control_hwnd: int, msg: int, 
-                           wparam: int = 0, lparam: int = 0, 
-                           use_post: bool = False) -> bool:
-        """
-        给指定控件发送Win32消息
-        :param control_hwnd: 控件句柄（通过find_child_control获取）
-        :param msg: 消息类型
-        :param wparam: WPARAM参数
-        :param lparam: LPARAM参数
-        :param use_post: 是否使用PostMessage异步发送
-        :return: 是否发送成功
-        """
-        if not control_hwnd or not win32gui.IsWindow(control_hwnd):
-            logger.error(f"无效的控件句柄: 0x{control_hwnd:X}")
-            return False
-        
-        try:
-            if use_post:
-                win32gui.PostMessage(control_hwnd, msg, wparam, lparam)
-                logger.debug(f"异步发送控件消息成功: 句柄=0x{control_hwnd:X} 消息=0x{msg:X}")
-            else:
-                result = win32gui.SendMessage(control_hwnd, msg, wparam, lparam)
-                logger.debug(f"同步发送控件消息成功: 句柄=0x{control_hwnd:X} 消息=0x{msg:X} 返回值={result}")
-            return True
-        except Exception as e:
-            logger.error(f"发送控件消息失败: 句柄=0x{control_hwnd:X} 错误={str(e)}")
-            return False
-    
-    def set_control_text(self, control_hwnd: int, text: str) -> bool:
-        """
-        设置输入框/文本控件的内容
-        :param control_hwnd: 控件句柄
-        :param text: 要设置的文本
-        :return: 是否设置成功
-        """
-        return self.send_control_message(control_hwnd, win32con.WM_SETTEXT, 0, text)
-    
-    def click_control(self, control_hwnd: int) -> bool:
-        """
-        点击按钮控件
-        :param control_hwnd: 按钮控件句柄
-        :return: 是否点击成功
-        """
-        # 发送BM_CLICK消息点击按钮
-        return self.send_control_message(control_hwnd, win32con.BM_CLICK, 0, 0, use_post=True)
-    
     def execute_step(self, step: Dict) -> bool:
         """
         执行单个操作步骤，支持多应用相关步骤
@@ -495,58 +342,83 @@ class MultiAppBase:
                 func = getattr(self, step['func'])
                 return func()
             
-            # 新增Win32消息/控件操作步骤
-            elif step_type == 'send_app_message':
-                return self.send_app_message(
-                    step['msg'],
-                    wparam=step.get('wparam', 0),
-                    lparam=step.get('lparam', 0),
-                    app_name=step.get('app_name'),
-                    use_post=step.get('use_post', False)
-                )
-            elif step_type == 'send_app_key':
-                return self.send_app_key(
-                    step['key_code'],
-                    app_name=step.get('app_name'),
-                    press=step.get('press', True)
-                )
+            # 新增控件操作步骤（使用新的控件操作器）
             elif step_type == 'find_control':
-                control_hwnd = self.find_child_control(
+                # 查找控件，支持Win32和UIA控件
+                properties = step.get('properties', {})
+                if not properties:
+                    # 兼容旧格式
+                    properties = {
+                        'source': step.get('source', 'win32'),
+                        'class_name': step.get('class_name'),
+                        'window_text': step.get('window_text'),
+                        'name': step.get('name'),
+                        'control_type': step.get('control_type'),
+                        'automation_id': step.get('automation_id'),
+                        'control_id': step.get('control_id')
+                    }
+                
+                control_info = self.find_control(
                     app_name=step.get('app_name'),
-                    class_name=step.get('class_name'),
-                    window_title=step.get('window_title'),
-                    control_id=step.get('control_id')
+                    properties=properties
                 )
-                if control_hwnd:
-                    # 保存找到的控件句柄到step_result，供后续步骤使用
-                    step['_result'] = control_hwnd
+                if control_info:
+                    # 保存找到的控件信息到step_result，供后续步骤使用
+                    step['_result'] = control_info
                     return True
                 return False
-            elif step_type == 'send_control_message':
-                # 支持直接传入control_hwnd或者从之前步骤获取
-                control_hwnd = step.get('control_hwnd') or step.get('_previous_result')
-                if not control_hwnd:
-                    logger.error("未指定控件句柄，且无前置步骤结果")
+            
+            elif step_type == 'click_control_by_properties':
+                # 根据属性点击控件
+                properties = step.get('properties', {})
+                if not properties:
+                    logger.error("未指定控件属性")
                     return False
-                return self.send_control_message(
-                    control_hwnd,
-                    step['msg'],
-                    wparam=step.get('wparam', 0),
-                    lparam=step.get('lparam', 0),
-                    use_post=step.get('use_post', False)
+                
+                return self.click_control_by_properties(
+                    app_name=step.get('app_name'),
+                    properties=properties,
+                    double=step.get('double', False)
                 )
-            elif step_type == 'set_control_text':
-                control_hwnd = step.get('control_hwnd') or step.get('_previous_result')
-                if not control_hwnd:
-                    logger.error("未指定控件句柄，且无前置步骤结果")
+            
+            elif step_type == 'send_text_to_control_by_properties':
+                # 根据属性给控件发送文本
+                properties = step.get('properties', {})
+                if not properties:
+                    logger.error("未指定控件属性")
                     return False
-                return self.set_control_text(control_hwnd, step['text'])
-            elif step_type == 'click_control':
-                control_hwnd = step.get('control_hwnd') or step.get('_previous_result')
-                if not control_hwnd:
-                    logger.error("未指定控件句柄，且无前置步骤结果")
+                
+                return self.send_text_to_control_by_properties(
+                    app_name=step.get('app_name'),
+                    properties=properties,
+                    text=step.get('text', '')
+                )
+            
+            elif step_type == 'create_and_click_control':
+                # 创建控件信息并点击（不实际查找）
+                properties = step.get('properties', {})
+                if not properties:
+                    logger.error("未指定控件属性")
                     return False
-                return self.click_control(control_hwnd)
+                
+                return self.create_and_click_control(
+                    app_name=step.get('app_name'),
+                    properties=properties,
+                    double=step.get('double', False)
+                )
+            
+            elif step_type == 'create_and_send_text_to_control':
+                # 创建控件信息并发送文本（不实际查找）
+                properties = step.get('properties', {})
+                if not properties:
+                    logger.error("未指定控件属性")
+                    return False
+                
+                return self.create_and_send_text_to_control(
+                    app_name=step.get('app_name'),
+                    properties=properties,
+                    text=step.get('text', '')
+                )
             
             else:
                 logger.error(f"未知步骤类型: {step_type}")
@@ -574,4 +446,146 @@ class MultiAppBase:
         logger.info(f"任务执行完成，成功{success_count}/{total_steps}步")
         return True
     
+    def send_message(self, text: str, parse_mode: str = 'Markdown', disable_notification: bool = False) -> bool:
+        """
+        发送文本消息到通知渠道
+        :param text: 消息内容
+        :param parse_mode: 解析模式（Markdown/HTML）
+        :param disable_notification: 是否静默发送
+        :return: 是否发送成功
+        """
+        return self.telegram_notifier.send_message(text, parse_mode, disable_notification)
     
+    def send_photo(self, photo_path: str, caption: str = '', disable_notification: bool = False) -> bool:
+        """
+        发送图片到通知渠道
+        :param photo_path: 图片路径
+        :param caption: 图片说明
+        :param disable_notification: 是否静默发送
+        :return: 是否发送成功
+        """
+        return self.telegram_notifier.send_photo(photo_path, caption, disable_notification)
+    
+    def notify_task_status(self, task_name: str, status: str, duration: float = 0, error_msg: str = '') -> bool:
+        """
+        快捷发送任务状态通知
+        :param task_name: 任务名称
+        :param status: 状态：start/complete/success/fail/error
+        :param duration: 耗时（秒）
+        :param error_msg: 错误信息（失败时必填）
+        :return: 是否发送成功
+        """
+        if status == 'start':
+            return self.telegram_notifier.notify_task_start(task_name)
+        elif status == 'complete' or status == 'success':
+            return self.telegram_notifier.notify_task_complete(task_name, duration, success=True)
+        elif status == 'fail' or status == 'error':
+            return self.telegram_notifier.notify_task_error(task_name, error_msg)
+        else:
+            logger.warning(f"未知的通知状态: {status}")
+            return False
+    
+    def find_control(self, app_name: Optional[str] = None, properties: Dict = None) -> Optional[ControlInfo]:
+        """
+        查找控件，支持Win32和UIA控件
+        :param app_name: 应用名称，不传则使用当前活跃应用
+        :param properties: 控件属性字典，可包含：
+            - source: "win32" 或 "uia"
+            - class_name: 类名
+            - window_text: 窗口文本
+            - name: UIA控件名称
+            - control_type: UIA控件类型
+            - automation_id: UIA自动化ID
+            - control_id: Win32控件ID
+        :return: 找到的控件信息，找不到返回None
+        """
+        if not properties:
+            logger.error("未指定控件属性")
+            return None
+        
+        # 确定目标应用
+        target_app = app_name or self.active_app
+        if not target_app:
+            logger.error("未指定应用且当前无活跃应用，请传入app_name参数")
+            return None
+        
+        if target_app not in self.app_states or not self.app_states[target_app]['running']:
+            logger.error(f"应用[{target_app}]未运行，请先启动")
+            return None
+        
+        hwnd = self.app_states[target_app]['hwnd']
+        return self.control_operator.find_control_by_properties(hwnd, properties)
+    
+    def click_control_by_properties(self, app_name: Optional[str] = None, properties: Dict = None, double: bool = False) -> bool:
+        """
+        根据属性点击控件，支持Win32和UIA控件
+        :param app_name: 应用名称，不传则使用当前活跃应用
+        :param properties: 控件属性字典
+        :param double: 是否双击
+        :return: 是否成功
+        """
+        control_info = self.find_control(app_name, properties)
+        if not control_info:
+            logger.error(f"未找到控件: {properties}")
+            return False
+        
+        return self.control_operator.click_control(control_info, double)
+    
+    def send_text_to_control_by_properties(self, app_name: Optional[str] = None, properties: Dict = None, text: str = "") -> bool:
+        """
+        根据属性给控件发送文本，支持Win32和UIA控件
+        :param app_name: 应用名称，不传则使用当前活跃应用
+        :param properties: 控件属性字典
+        :param text: 要发送的文本
+        :return: 是否成功
+        """
+        control_info = self.find_control(app_name, properties)
+        if not control_info:
+            logger.error(f"未找到控件: {properties}")
+            return False
+        
+        return self.control_operator.send_text_to_control(control_info, text)
+    
+    def create_and_click_control(self, app_name: Optional[str] = None, properties: Dict = None, double: bool = False) -> bool:
+        """
+        创建控件信息并点击（不实际查找，直接使用提供的属性）
+        :param app_name: 应用名称，不传则使用当前活跃应用
+        :param properties: 控件属性字典
+        :param double: 是否双击
+        :return: 是否成功
+        """
+        # 确定目标应用
+        target_app = app_name or self.active_app
+        if not target_app:
+            logger.error("未指定应用且当前无活跃应用，请传入app_name参数")
+            return False
+        
+        if target_app not in self.app_states or not self.app_states[target_app]['running']:
+            logger.error(f"应用[{target_app}]未运行，请先启动")
+            return False
+        
+        hwnd = self.app_states[target_app]['hwnd']
+        control_info = self.control_operator.create_control_from_properties(hwnd, properties)
+        return self.control_operator.click_control(control_info, double)
+    
+    def create_and_send_text_to_control(self, app_name: Optional[str] = None, properties: Dict = None, text: str = "") -> bool:
+        """
+        创建控件信息并发送文本（不实际查找，直接使用提供的属性）
+        :param app_name: 应用名称，不传则使用当前活跃应用
+        :param properties: 控件属性字典
+        :param text: 要发送的文本
+        :return: 是否成功
+        """
+        # 确定目标应用
+        target_app = app_name or self.active_app
+        if not target_app:
+            logger.error("未指定应用且当前无活跃应用，请传入app_name参数")
+            return False
+        
+        if target_app not in self.app_states or not self.app_states[target_app]['running']:
+            logger.error(f"应用[{target_app}]未运行，请先启动")
+            return False
+        
+        hwnd = self.app_states[target_app]['hwnd']
+        control_info = self.control_operator.create_control_from_properties(hwnd, properties)
+        return self.control_operator.send_text_to_control(control_info, text)
