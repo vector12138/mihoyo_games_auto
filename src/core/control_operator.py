@@ -139,6 +139,20 @@ class UiaOperator(BaseOperator):
         """点击UIA控件"""
         try:
             self._activate_window(control.hwnd)
+            
+            # 如果控件已经有UIA对象，直接使用
+            if control._uia_obj:
+                try:
+                    if double:
+                        control._uia_obj.DoubleClick()
+                    else:
+                        control._uia_obj.Click()
+                    logger.debug(f"直接操作UIA控件: {control.automation_id or control.name}")
+                    return True
+                except Exception as e:
+                    logger.debug(f"直接操作UIA控件失败: {str(e)}，尝试重新查找")
+            
+            # 如果没有UIA对象或直接操作失败，重新查找
             root_hwnd = win32gui.GetAncestor(control.hwnd, win32con.GA_ROOT)
             root_ctrl = auto.ControlFromHandle(root_hwnd)
             uia_ctrl = None
@@ -192,6 +206,18 @@ class UiaOperator(BaseOperator):
         """发送文本到UIA控件"""
         try:
             self._activate_window(control.hwnd)
+            
+            # 如果控件已经有UIA对象，直接使用
+            if control._uia_obj:
+                try:
+                    control._uia_obj.SendKeys("{Ctrl}a{Del}", waitTime=0.05)
+                    control._uia_obj.SendKeys(text, waitTime=0.01)
+                    logger.debug(f"直接操作UIA控件输入文本: {control.automation_id or control.name}")
+                    return True
+                except Exception as e:
+                    logger.debug(f"直接操作UIA控件输入失败: {str(e)}，尝试重新查找")
+            
+            # 如果没有UIA对象或直接操作失败，重新查找
             root_hwnd = win32gui.GetAncestor(control.hwnd, win32con.GA_ROOT)
             root_ctrl = auto.ControlFromHandle(root_hwnd)
             uia_ctrl = None
@@ -545,7 +571,8 @@ class ControlOperator:
                     for child in children:
                         if self._match_control_properties(child, level_props):
                             current_ctrl = child
-                            current_ctrl.hwnd = parent_hwnd if child.hwnd == 0 else child.hwnd
+                            if child.hwnd == 0:
+                                current_ctrl.hwnd = parent_hwnd
                             break
                 
                 # 父控件是Win32控件，枚举子窗口查找
@@ -571,8 +598,9 @@ class ControlOperator:
                     current_ctrl = None
                     for child in children:
                         if self._match_control_properties(child, level_props):
-                            current_ctrl.hwnd = parent_hwnd if child.hwnd == 0 else child.hwnd
                             current_ctrl = child
+                            if child.hwnd == 0:
+                                current_ctrl.hwnd = parent_hwnd
                             break
             
             if not current_ctrl:
