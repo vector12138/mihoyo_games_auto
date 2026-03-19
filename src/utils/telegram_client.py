@@ -261,27 +261,53 @@ def test_notifier():
     """测试通知功能"""
     logger.info("测试Telegram通知功能...")
     
-    config = load_config()
-    if not config:
-        logger.error("❌ 无法加载配置")
+    # 加载配置
+    config_path = Path(__file__).parent.parent.parent / 'config.yaml'
+    if not config_path.exists():
+        config_path = Path(__file__).parent.parent.parent / 'config.example.yaml'
+    
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+    except Exception as e:
+        logger.error(f"❌ 加载配置文件失败: {e}")
         return False
     
-    telegram_config = config.get('telegram', {})
-    notifier = TelegramNotifier(telegram_config)
+    # 构建Telegram配置
+    telegram_config = {}
+    global_config = config.get('global', {})
+    if global_config.get('telegram_notify', False):
+        telegram_config = {
+            'enabled': True,
+            'bot_token': global_config.get('telegram_token', ''),
+            'chat_id': global_config.get('telegram_chat_id', ''),
+            'proxy': config.get('telegram_proxy', {})
+        }
     
-    if not notifier.enabled:
-        logger.error("❌ Telegram通知未启用，请检查配置")
+    telegram_bots_config = config.get('telegram_bots', {}).get('main', {})
+    if telegram_bots_config.get('enabled', False):
+        telegram_config = {
+            'enabled': telegram_bots_config.get('enabled', False),
+            'bot_token': telegram_bots_config.get('token', ''),
+            'chat_id': telegram_bots_config.get('chat_id', ''),
+            'proxy': config.get('telegram_proxy', {})
+        }
+    
+    client = TelegramClient(telegram_config)
+    
+    if not client.enabled:
+        logger.error("❌ Telegram未启用，请检查配置")
         return False
     
     # 测试连接
     logger.info("测试Telegram连接...")
-    if not notifier.test_connection():
+    if not client.test_connection():
         logger.error("❌ Telegram连接测试失败")
         return False
     
     # 测试消息
     logger.info("发送测试消息...")
-    success = notifier.send_message("🔧 *测试消息*\n\n这是米哈游游戏自动化的测试通知。\n*时间*: " + datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    success = client.send_message("🔧 *测试消息*\n\n这是米哈游游戏自动化的测试通知。\n*时间*: " + datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     
     if success:
         logger.info("✅ 测试消息发送成功")

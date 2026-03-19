@@ -11,7 +11,7 @@ from src.config.logging_config import setup_logging
 from src.config import Config
 from games.genshin import GenshinImpact
 from games.zzz import ZenlessZoneZero
-from src.utils import TelegramNotifier
+from src.utils import TelegramClient, TelegramNotifier
 from src.utils.util import run_as_admin
 from src.core import shutdown
 

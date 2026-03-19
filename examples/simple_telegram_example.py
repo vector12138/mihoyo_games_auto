@@ -9,7 +9,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.core.game_base import MultiAppBase
-from src.utils.config_loader import load_config
+from src.config.config import Config
 
 
 class TelegramDemo(MultiAppBase):
@@ -62,7 +62,7 @@ class TelegramDemo(MultiAppBase):
 
 if __name__ == '__main__':
     # 加载配置
-    config = load_config('config.yaml')
+    config = Config('config.yaml').config
     
     # 创建演示实例
     demo = TelegramDemo(config)
