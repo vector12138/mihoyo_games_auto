@@ -27,7 +27,21 @@ class ZenlessZoneZero(MultiAppBase):
         }
         
         # 根据模式选择操作步骤
-        self.task_steps = self._get_multi_app_steps()
+        self.task_steps = self._get_multi_app_steps_by_uia()
+
+        if self.config.get('auto_close', True):
+            self.task_steps.append({
+                'name': '关闭绝区零游戏',
+                'type': 'close_app',
+                'app_name': 'zzz_game',
+                'force': False
+            })
+            self.task_steps.append({
+                'name': '关闭zzz-onedragen辅助工具',
+                'type': 'close_app',
+                'app_name': 'zzz_onedragen',
+                'force': False
+            })
     
     def _get_multi_app_steps(self) -> list:
         """获取多应用辅助模式的操作步骤"""
@@ -74,19 +88,55 @@ class ZenlessZoneZero(MultiAppBase):
                 'timeout': 1800  # 可根据实际情况调整时间
             }
         ]
-
-        if self.config.get('auto_close', True):
-            steps.append({
-                'name': '关闭绝区零游戏',
-                'type': 'close_app',
-                'app_name': 'zzz_game',
-                'force': True
-            })
-            steps.append({
-                'name': '关闭zzz-onedragen辅助工具',
-                'type': 'close_app',
-                'app_name': 'zzz_onedragen',
-                'force': True
-            })
         
         return steps
+    
+    def _get_multi_app_steps_by_uia(self) -> list:
+        """获取多应用辅助模式的操作步骤"""
+
+        steps = [
+            {
+                'name': '启动绝区零',
+                'type': 'launch_app',
+                'app_name': 'zzz_game',
+                'timeout': 60
+            },
+            {
+                'name': '启动zzz-onedragen辅助工具',
+                'type': 'launch_app',
+                'app_name': 'zzz_onedragen',
+                'timeout': 60
+            },
+            {
+                'name': '等待辅助窗口激活',
+                'type': 'sleep',
+                'seconds': 10
+            },
+            {
+                'name': '点击一条龙按钮',
+                'type': 'click_control_by_properties',
+                'properties': {'source': 'uia','automation_id': 'QApplication.PhosWindow.areaWidget.StackedWidget.PopUpAniStackedWidget.home_interface.SingleDirectionScrollArea.qt_scrollarea_viewport.Banner.QWidget.QWidget.start_button'},
+                'timeout': 10
+            },
+            {
+                'name': '等待一条龙任务执行完成（10分钟）',
+                'type': 'sleep',
+                'seconds': 600  # 可根据实际情况调整时间
+            },
+            {
+                'name': '切换到绝区零游戏窗口',
+                'type': 'switch_app',
+                'app_name': 'zzz_game'
+            },
+            {
+                'name': "检测一条龙是否运行完成",
+                'type': 'wait',
+                'text': '个人主页',
+                'interval': 10,
+                'timeout': 1800  # 可根据实际情况调整时间
+            }
+        ]
+        
+        return steps
+    
+    
