@@ -16,13 +16,13 @@ import win32process
 import ctypes
 from .control_operator import ControlOperator, ControlInfo
 
-# 尝试导入Telegram客户端
+# 尝试导入Telegram工具类
 try:
-    from ..utils.telegram_client import get_telegram_client
+    from ..utils.telegram_notifier import get_telegram_instance
     TELEGRAM_AVAILABLE = True
 except ImportError:
     TELEGRAM_AVAILABLE = False
-    logger.warning("Telegram客户端模块不可用，相关功能将被禁用")
+    logger.warning("Telegram模块不可用，相关功能将被禁用")
 
 # 第一步：设置系统权限（允许设置前台窗口）
 
@@ -53,15 +53,15 @@ class MultiAppBase:
         # 控件操作器
         self.control_operator = ControlOperator(global_config.get('control_operator', {}))
         
-        # Telegram客户端（如果可用）
+        # Telegram工具（如果可用）
         self.telegram_client = None
         if TELEGRAM_AVAILABLE:
             try:
-                self.telegram_client = get_telegram_client(global_config)
-                if self.telegram_client:
-                    logger.info("Telegram客户端初始化成功")
+                self.telegram_client = get_telegram_instance(global_config)
+                if self.telegram_client and self.telegram_client.is_available():
+                    logger.info("Telegram工具初始化成功")
             except Exception as e:
-                logger.error(f"初始化Telegram客户端失败: {str(e)}")
+                logger.error(f"初始化Telegram工具失败: {str(e)}")
                 self.telegram_client = None
         
         # 应用状态管理
