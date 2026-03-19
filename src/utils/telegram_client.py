@@ -14,8 +14,8 @@ from datetime import datetime
 from typing import Dict, Optional, Callable, List
 from loguru import logger
 
-class TelegramNotifier:
-    """Telegram通知器，支持代理"""
+class TelegramClient:
+    """Telegram客户端，支持通知和消息交互"""
     
     def __init__(self, config=None):
         """初始化Telegram工具类"""
@@ -414,13 +414,13 @@ def test_notifier():
         return self.enabled
 
 # 全局实例
-_telegram_instance: Optional[TelegramNotifier] = None
+_telegram_instance: Optional[TelegramClient] = None
 
-def get_telegram_instance(config: Dict = None) -> Optional[TelegramNotifier]:
+def get_telegram_client(config: Dict = None) -> Optional[TelegramClient]:
     """
     获取Telegram单例
     :param config: 配置字典，首次调用时需要
-    :return: TelegramNotifier实例
+    :return: TelegramClient实例
     """
     global _telegram_instance
     if _telegram_instance is None and config is not None:
@@ -447,7 +447,7 @@ def get_telegram_instance(config: Dict = None) -> Optional[TelegramNotifier]:
                 'proxy': config.get('telegram_proxy', {})
             }
         
-        _telegram_instance = TelegramNotifier(telegram_config)
+        _telegram_instance = TelegramClient(telegram_config)
     
     return _telegram_instance
 

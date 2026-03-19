@@ -16,9 +16,9 @@ import win32process
 import ctypes
 from .control_operator import ControlOperator, ControlInfo
 
-# 尝试导入Telegram工具类
+# 尝试导入Telegram客户端
 try:
-    from ..utils.telegram_notifier import get_telegram_instance
+    from ..utils.telegram_client import get_telegram_client
     TELEGRAM_AVAILABLE = True
 except ImportError:
     TELEGRAM_AVAILABLE = False
@@ -53,15 +53,15 @@ class MultiAppBase:
         # 控件操作器
         self.control_operator = ControlOperator(global_config.get('control_operator', {}))
         
-        # Telegram工具（如果可用）
+        # Telegram客户端（如果可用）
         self.telegram_client = None
         if TELEGRAM_AVAILABLE:
             try:
-                self.telegram_client = get_telegram_instance(global_config)
+                self.telegram_client = get_telegram_client(global_config)
                 if self.telegram_client and self.telegram_client.is_available():
-                    logger.info("Telegram工具初始化成功")
+                    logger.info("Telegram客户端初始化成功")
             except Exception as e:
-                logger.error(f"初始化Telegram工具失败: {str(e)}")
+                logger.error(f"初始化Telegram客户端失败: {str(e)}")
                 self.telegram_client = None
         
         # 应用状态管理
@@ -220,11 +220,11 @@ class MultiAppBase:
             logger.error(f"切换到应用[{window_title}]失败: {str(e)}")
             return False
     
-    # ==================== Telegram 消息相关方法 ====================
-    def send_telegram_message(self, text: str = '', parse_mode: str = 'HTML', 
+    # ==================== Telegram 相关方法 ====================
+    def send_message(self, text: str = '', parse_mode: str = 'HTML', 
                              disable_notification: bool = False) -> bool:
         """
-        发送Telegram消息
+        发送消息到Telegram
         :param text: 消息文本
         :param parse_mode: 解析模式
         :param disable_notification: 是否禁用通知
@@ -240,7 +240,7 @@ class MultiAppBase:
             disable_notification=disable_notification
         )
     
-    def wait_for_telegram_message(self, timeout: int = 60, 
+    def wait_for_message(self, timeout: int = 60, 
                                  filter_func=None) -> Optional[dict]:
         """
         等待Telegram消息
@@ -257,7 +257,7 @@ class MultiAppBase:
             filter_func=filter_func
         )
     
-    def wait_for_telegram_text(self, expected_text: str, timeout: int = 60, 
+    def wait_for_text(self, expected_text: str, timeout: int = 60, 
                               case_sensitive: bool = False) -> Optional[dict]:
         """
         等待包含特定文本的Telegram消息
@@ -276,7 +276,7 @@ class MultiAppBase:
             case_sensitive=case_sensitive
         )
     
-    def wait_for_telegram_command(self, command: str, timeout: int = 60) -> Optional[dict]:
+    def wait_for_command(self, command: str, timeout: int = 60) -> Optional[dict]:
         """
         等待特定命令的Telegram消息
         :param command: 命令（不需要带/）
@@ -291,6 +291,19 @@ class MultiAppBase:
             command=command,
             timeout=timeout
         )
+    
+    # 兼容旧接口，保持向后兼容
+    def send_telegram_message(self, *args, **kwargs):
+        return self.send_message(*args, **kwargs)
+    
+    def wait_for_telegram_message(self, *args, **kwargs):
+        return self.wait_for_message(*args, **kwargs)
+    
+    def wait_for_telegram_text(self, *args, **kwargs):
+        return self.wait_for_text(*args, **kwargs)
+    
+    def wait_for_telegram_command(self, *args, **kwargs):
+        return self.wait_for_command(*args, **kwargs)
     
     def close_app(self, app_name: str, force: bool = False) -> bool:
         """
