@@ -241,11 +241,17 @@ class MultiAppBase:
         )
     
     def wait_for_message(self, timeout: int = 60, 
-                                 filter_func=None) -> Optional[dict]:
+                                 filter_func=None,
+                                 sender_id: Optional[str] = None,
+                                 only_user: bool = False,
+                                 only_bot: bool = False) -> Optional[dict]:
         """
         等待Telegram消息
         :param timeout: 超时时间（秒）
         :param filter_func: 过滤函数
+        :param sender_id: 可选，只等待指定发送者ID的消息
+        :param only_user: 可选，只等待普通用户的消息（排除bot消息）
+        :param only_bot: 可选，只等待其他bot发送的消息
         :return: 匹配的消息，超时返回None
         """
         if not self.telegram_client or not self.telegram_client.is_available():
@@ -254,7 +260,10 @@ class MultiAppBase:
         
         return self.telegram_client.wait_for_message(
             timeout=timeout,
-            filter_func=filter_func
+            filter_func=filter_func,
+            sender_id=sender_id,
+            only_user=only_user,
+            only_bot=only_bot
         )
     
     def wait_for_text(self, expected_text: str, timeout: int = 60, 

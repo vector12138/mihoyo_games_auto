@@ -284,11 +284,17 @@ class TelegramClient:
             return []
     
     def wait_for_message(self, timeout: int = 60, 
-                        filter_func: Optional[Callable[[Dict], bool]] = None) -> Optional[Dict]:
+                        filter_func: Optional[Callable[[Dict], bool]] = None,
+                        sender_id: Optional[str] = None,
+                        only_user: bool = False,
+                        only_bot: bool = False) -> Optional[Dict]:
         """
         等待特定消息
         :param timeout: 超时时间（秒）
         :param filter_func: 过滤函数，接收消息字典，返回True表示匹配成功
+        :param sender_id: 可选，只等待指定发送者ID的消息
+        :param only_user: 可选，只等待普通用户的消息（排除bot消息）
+        :param only_bot: 可选，只等待其他bot发送的消息
         :return: 匹配的消息字典，超时返回None
         """
         if not self.enabled:
@@ -296,7 +302,15 @@ class TelegramClient:
             return None
         
         start_time = time.time()
-        logger.info(f"开始等待Telegram消息，超时时间: {timeout}秒")
+        filter_desc = []
+        if sender_id:
+            filter_desc.append(f"发送者ID: {sender_id}")
+        if only_user:
+            filter_desc.append("仅用户消息")
+        if only_bot:
+            filter_desc.append("仅Bot消息")
+        
+        logger.info(f"开始等待Telegram消息，超时时间: {timeout}秒，过滤条件: {', '.join(filter_desc) if filter_desc else '无'}")
         
         while time.time() - start_time < timeout:
             remaining_time = int(timeout - (time.time() - start_time))
@@ -315,14 +329,37 @@ class TelegramClient:
                     logger.debug(f"忽略来自其他聊天的消息: {message.get('chat', {}).get('id')}")
                     continue
                 
-                # 如果没有过滤函数，直接返回第一条消息
+                # 发送者ID过滤
+                if sender_id:
+                    message_sender_id = str(message.get('from', {}).get('id', ''))
+                    if message_sender_id != str(sender_id):
+                        logger.debug(f"忽略来自其他发送者的消息: {message_sender_id}")
+                        continue
+                
+                # 仅用户消息过滤
+                if only_user:
+                    is_bot = message.get('from', {}).get('is_bot', False)
+                    if is_bot:
+                        logger.debug("忽略Bot发送的消息")
+                        continue
+                
+                # 仅Bot消息过滤
+                if only_bot:
+                    is_bot = message.get('from', {}).get('is_bot', False)
+                    if not is_bot:
+                        logger.debug("忽略普通用户发送的消息")
+                        continue
+                
+                # 如果没有过滤函数，直接返回第一条匹配的消息
                 if filter_func is None:
-                    logger.info(f"收到消息: {message.get('text', '')[:50]}...")
+                    sender_type = "Bot" if message.get('from', {}).get('is_bot', False) else "用户"
+                    logger.info(f"收到{sender_type}消息: {message.get('text', '')[:50]}...")
                     return message
                 
                 # 使用过滤函数匹配
                 if filter_func(message):
-                    logger.info(f"收到匹配的消息: {message.get('text', '')[:50]}...")
+                    sender_type = "Bot" if message.get('from', {}).get('is_bot', False) else "用户"
+                    logger.info(f"收到匹配的{sender_type}消息: {message.get('text', '')[:50]}...")
                     return message
             
             # 短暂休眠避免频繁请求
