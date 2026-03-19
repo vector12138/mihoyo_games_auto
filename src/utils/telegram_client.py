@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Telegram工具类
-融合通知功能和消息等待功能
+Telegram客户端，支持通知和消息交互
 支持代理配置、消息发送、图片发送、消息监听等
 """
 
 import requests
-import yaml
 import time
 import threading
 from pathlib import Path
@@ -14,11 +13,12 @@ from datetime import datetime
 from typing import Dict, Optional, Callable, List
 from loguru import logger
 
+
 class TelegramClient:
     """Telegram客户端，支持通知和消息交互"""
     
     def __init__(self, config=None):
-        """初始化Telegram工具类"""
+        """初始化Telegram客户端"""
         self.config = config or {}
         self.bot_token = self.config.get('bot_token', '')
         self.chat_id = self.config.get('chat_id', '')
@@ -85,7 +85,7 @@ class TelegramClient:
         :return: 是否成功
         """
         if not self.enabled:
-            logger.debug("Telegram通知未启用，跳过发送")
+            logger.debug("Telegram未启用，跳过发送")
             return False
         
         try:
@@ -120,7 +120,7 @@ class TelegramClient:
         :return: 是否成功
         """
         if not self.enabled:
-            logger.debug("Telegram通知未启用，跳过发送")
+            logger.debug("Telegram未启用，跳过发送")
             return False
         
         if not Path(photo_path).exists():
@@ -187,7 +187,7 @@ class TelegramClient:
         :return: 是否连接成功
         """
         if not self.enabled:
-            logger.warning("Telegram通知未启用，无法测试连接")
+            logger.warning("Telegram未启用，无法测试连接")
             return False
         
         try:
@@ -243,79 +243,7 @@ class TelegramClient:
                 text += f"{status} {detail.get('task', '未知')}: {detail.get('duration', 0):.1f}秒\n"
         
         return self.send_message(text)
-
-def load_config():
-    """加载配置文件"""
-    config_path = Path(__file__).parent / 'config.yaml'
-    if not config_path.exists():
-        config_path = Path(__file__).parent / 'config.example.yaml'
     
-    try:
-        with open(config_path, 'r', encoding='utf-8') as f:
-            return yaml.safe_load(f)
-    except Exception as e:
-        print(f"❌ 加载配置文件失败: {e}")
-        return None
-
-def test_notifier():
-    """测试通知功能"""
-    logger.info("测试Telegram通知功能...")
-    
-    # 加载配置
-    config_path = Path(__file__).parent.parent.parent / 'config.yaml'
-    if not config_path.exists():
-        config_path = Path(__file__).parent.parent.parent / 'config.example.yaml'
-    
-    try:
-        with open(config_path, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
-    except Exception as e:
-        logger.error(f"❌ 加载配置文件失败: {e}")
-        return False
-    
-    # 构建Telegram配置
-    telegram_config = {}
-    global_config = config.get('global', {})
-    if global_config.get('telegram_notify', False):
-        telegram_config = {
-            'enabled': True,
-            'bot_token': global_config.get('telegram_token', ''),
-            'chat_id': global_config.get('telegram_chat_id', ''),
-            'proxy': config.get('telegram_proxy', {})
-        }
-    
-    telegram_bots_config = config.get('telegram_bots', {}).get('main', {})
-    if telegram_bots_config.get('enabled', False):
-        telegram_config = {
-            'enabled': telegram_bots_config.get('enabled', False),
-            'bot_token': telegram_bots_config.get('token', ''),
-            'chat_id': telegram_bots_config.get('chat_id', ''),
-            'proxy': config.get('telegram_proxy', {})
-        }
-    
-    client = TelegramClient(telegram_config)
-    
-    if not client.enabled:
-        logger.error("❌ Telegram未启用，请检查配置")
-        return False
-    
-    # 测试连接
-    logger.info("测试Telegram连接...")
-    if not client.test_connection():
-        logger.error("❌ Telegram连接测试失败")
-        return False
-    
-    # 测试消息
-    logger.info("发送测试消息...")
-    success = client.send_message("🔧 *测试消息*\n\n这是米哈游游戏自动化的测试通知。\n*时间*: " + datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-    
-    if success:
-        logger.info("✅ 测试消息发送成功")
-    else:
-        logger.error("❌ 测试消息发送失败")
-    
-    return success
-
     # ==================== 消息等待功能 ====================
     def get_updates(self, timeout: int = 30) -> List[Dict]:
         """
@@ -439,8 +367,10 @@ def test_notifier():
         """检查Telegram是否可用"""
         return self.enabled
 
+
 # 全局实例
 _telegram_instance: Optional[TelegramClient] = None
+
 
 def get_telegram_client(config: Dict = None) -> Optional[TelegramClient]:
     """
@@ -476,6 +406,3 @@ def get_telegram_client(config: Dict = None) -> Optional[TelegramClient]:
         _telegram_instance = TelegramClient(telegram_config)
     
     return _telegram_instance
-
-if __name__ == '__main__':
-    test_notifier()
