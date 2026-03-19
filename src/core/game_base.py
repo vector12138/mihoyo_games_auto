@@ -220,6 +220,78 @@ class MultiAppBase:
             logger.error(f"切换到应用[{window_title}]失败: {str(e)}")
             return False
     
+    # ==================== Telegram 消息相关方法 ====================
+    def send_telegram_message(self, text: str = '', parse_mode: str = 'HTML', 
+                             disable_notification: bool = False) -> bool:
+        """
+        发送Telegram消息
+        :param text: 消息文本
+        :param parse_mode: 解析模式
+        :param disable_notification: 是否禁用通知
+        :return: 发送是否成功
+        """
+        if not self.telegram_client or not self.telegram_client.is_available():
+            logger.warning("Telegram客户端不可用，无法发送消息")
+            return False
+        
+        return self.telegram_client.send_message(
+            text=text,
+            parse_mode=parse_mode,
+            disable_notification=disable_notification
+        )
+    
+    def wait_for_telegram_message(self, timeout: int = 60, 
+                                 filter_func=None) -> Optional[dict]:
+        """
+        等待Telegram消息
+        :param timeout: 超时时间（秒）
+        :param filter_func: 过滤函数
+        :return: 匹配的消息，超时返回None
+        """
+        if not self.telegram_client or not self.telegram_client.is_available():
+            logger.warning("Telegram客户端不可用，无法等待消息")
+            return None
+        
+        return self.telegram_client.wait_for_message(
+            timeout=timeout,
+            filter_func=filter_func
+        )
+    
+    def wait_for_telegram_text(self, expected_text: str, timeout: int = 60, 
+                              case_sensitive: bool = False) -> Optional[dict]:
+        """
+        等待包含特定文本的Telegram消息
+        :param expected_text: 期望文本
+        :param timeout: 超时时间
+        :param case_sensitive: 是否区分大小写
+        :return: 匹配的消息
+        """
+        if not self.telegram_client or not self.telegram_client.is_available():
+            logger.warning("Telegram客户端不可用，无法等待消息")
+            return None
+        
+        return self.telegram_client.wait_for_text(
+            expected_text=expected_text,
+            timeout=timeout,
+            case_sensitive=case_sensitive
+        )
+    
+    def wait_for_telegram_command(self, command: str, timeout: int = 60) -> Optional[dict]:
+        """
+        等待特定命令的Telegram消息
+        :param command: 命令（不需要带/）
+        :param timeout: 超时时间
+        :return: 匹配的消息
+        """
+        if not self.telegram_client or not self.telegram_client.is_available():
+            logger.warning("Telegram客户端不可用，无法等待消息")
+            return None
+        
+        return self.telegram_client.wait_for_command(
+            command=command,
+            timeout=timeout
+        )
+    
     def close_app(self, app_name: str, force: bool = False) -> bool:
         """
         关闭指定应用
