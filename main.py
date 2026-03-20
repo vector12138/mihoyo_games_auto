@@ -11,7 +11,7 @@ from src.config.logging_config import setup_logging
 from src.config import Config
 from games.genshin import GenshinImpact
 from games.zzz import ZenlessZoneZero
-from src.utils import TelegramClient, TelegramNotifier
+from src.utils import get_telegram_bridge_client
 from src.utils.util import run_as_admin
 from src.core import shutdown
 
@@ -40,21 +40,8 @@ def main():
     
     # 初始化通知器
     notifier = None
-    if config.get("telegram.notify_enabled"):
-        telegram_config = {
-            'bot_token': config.get("telegram.notify_token"),
-            'chat_id': config.get("telegram.notify_chat_id"),
-            'enabled': True,
-            'proxy': {
-                'enabled': config.get("telegram.proxy.enabled", False),
-                'url': config.get("telegram.proxy.url", ""),
-                'auth': {
-                    'username': config.get("telegram.proxy.auth.username", ""),
-                    'password': config.get("telegram.proxy.auth.password", "")
-                }
-            }
-        }
-        notifier = TelegramNotifier(telegram_config)
+    if config.get("telegram.enabled"):
+        notifier = get_telegram_bridge_client(config.get("telegram"))
         notifier.send_message("🎮 游戏自动化任务开始执行")
     
     # 需要执行的游戏列表

@@ -63,7 +63,7 @@ class MultiAppBase:
         self.telegram_bridge_client = None
         if TELEGRAM_BRIDGE_AVAILABLE:
             try:
-                self.telegram_bridge_client = get_telegram_bridge_client(global_config.get('telegram', {}).get('bridge', {}))
+                self.telegram_bridge_client = get_telegram_bridge_client(global_config.get('telegram', {}))
                 if self.telegram_bridge_client and self.telegram_bridge_client.enabled:
                     logger.info("Telegram Bridge客户端初始化成功")
             except Exception as e:
@@ -626,33 +626,6 @@ class MultiAppBase:
         
         hwnd = self.app_states[target_app]['hwnd']
         return self.control_operator.find_by_hierarchy(hwnd, hierarchy)
-    
-    # ==================== Telegram 消息相关方法 ====================
-    
-    def send_telegram_message(self, bot_name: str = 'default', text: str = '', 
-                             parse_mode: str = 'HTML', disable_notification: bool = False) -> bool:
-        """
-        发送Telegram消息
-        :param bot_name: 机器人名称，默认为'default'
-        :param text: 消息文本
-        :param parse_mode: 解析模式，支持'HTML'或'Markdown'
-        :param disable_notification: 是否禁用通知
-        :return: 是否发送成功
-        """
-        if not self.telegram_client:
-            logger.error("Telegram客户端未初始化，无法发送消息")
-            return False
-        
-        try:
-            return self.telegram_client.send_message(
-                bot_name=bot_name,
-                text=text,
-                parse_mode=parse_mode,
-                disable_notification=disable_notification
-            )
-        except Exception as e:
-            logger.error(f"发送Telegram消息失败: {str(e)}")
-            return False
     
     def wait_for_telegram_text(self, expected_text: str = '', 
                               timeout: int = 60, case_sensitive: bool = False,

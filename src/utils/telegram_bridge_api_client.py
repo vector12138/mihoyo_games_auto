@@ -20,15 +20,17 @@ class TelegramBridgeApiClient:
         """
         self.config = config
         self.enabled = config.get('enabled', False)
-        self.mode = config.get('mode', 'bridge')  # 支持bridge/telegram两种模式
+        self.mode = config.get('mode', 'telegram')  # 支持bridge/telegram两种模式
         # Bridge模式配置
         self.api_url = config.get('api_url', 'http://127.0.0.1:8080')
         self.api_key = config.get('api_key', '')
         # Telegram原生API模式配置
+        self.telegram_api_host = config.get('api_url', 'https://api.telegram.org')
+        # 通用配置
         self.bot_token = config.get('bot_token', '')
         self.bot_name = config.get('bot_name', '')
-        self.telegram_api_host = config.get('telegram_api_host', 'https://api.telegram.org')
-        # 通用配置
+        self.chat_id = config.get('chat_id', '')
+
         self.listen_chat_ids = config.get('listen_chat_ids', [])
         self.poll_interval = float(config.get('poll_interval', 1))
         self.command_prefix = config.get('command_prefix', '/')
@@ -73,7 +75,7 @@ class TelegramBridgeApiClient:
             logger.error(f"API请求失败 {method} {url}: {str(e)}")
             return None
     
-    def send_message(self, chat_id: int, text: str, parse_mode: str = "Markdown", disable_notification: bool = False) -> Optional[str]:
+    def send_message(self, text: str = '', chat_id: int = None, parse_mode: str = "Markdown", disable_notification: bool = False) -> Optional[str]:
         """
         发送消息
         :return: 任务ID(bridge模式)或消息ID(telegram模式)，失败返回None
@@ -85,7 +87,7 @@ class TelegramBridgeApiClient:
             # 直接调用Telegram原生API
             url = f"{self.telegram_api_host.rstrip('/')}/bot{self.bot_token}/sendMessage"
             data = {
-                "chat_id": chat_id,
+                "chat_id": chat_id or self.chat_id,
                 "text": text,
                 "parse_mode": parse_mode,
                 "disable_notification": disable_notification

@@ -3,16 +3,11 @@
 包含各种工具和辅助功能
 """
 
-from .telegram_client import TelegramClient
 from .util import get_prj_root
-
+from .telegram_bridge_api_client import TelegramBridgeApiClient, get_telegram_bridge_client
 
 __all__ = [
-    'TelegramClient',
     'get_prj_root',
-    # 兼容旧导出
-    'TelegramNotifier'
+    'TelegramBridgeApiClient',
+    'get_telegram_bridge_client'
 ]
-
-# 兼容旧导入
-TelegramNotifier = TelegramClient
