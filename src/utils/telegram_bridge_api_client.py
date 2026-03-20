@@ -20,8 +20,14 @@ class TelegramBridgeApiClient:
         """
         self.config = config
         self.enabled = config.get('enabled', False)
+        self.mode = config.get('mode', 'bridge')  # 支持bridge/telegram两种模式
+        # Bridge模式配置
         self.api_url = config.get('api_url', 'http://127.0.0.1:8080')
         self.api_key = config.get('api_key', '')
+        # Telegram原生API模式配置
+        self.bot_token = config.get('bot_token', '')
+        self.telegram_api_host = config.get('telegram_api_host', 'https://api.telegram.org')
+        # 通用配置
         self.listen_chat_ids = config.get('listen_chat_ids', [])
         self.poll_interval = float(config.get('poll_interval', 1))
         self.command_prefix = config.get('command_prefix', '/')
@@ -33,7 +39,14 @@ class TelegramBridgeApiClient:
         if self.enabled:
             # 初始化上次处理时间为当前时间，只处理启动后的新消息
             self.last_processed_timestamp = int(time.time())
-            logger.info("✅ Telegram Bridge API客户端初始化成功")
+            if self.mode == 'telegram':
+                if not self.bot_token:
+                    logger.error("Telegram原生API模式需要配置bot_token")
+                    self.enabled = False
+                else:
+                    logger.info(f"✅ Telegram原生API客户端初始化成功，API Host: {self.telegram_api_host}")
+            else:
+                logger.info("✅ Telegram Bridge API客户端初始化成功")
     
     def _request(self, method: str, path: str, params: Dict = None, json: Dict = None) -> Optional[Dict]:
         """
@@ -62,19 +75,44 @@ class TelegramBridgeApiClient:
     def send_message(self, chat_id: int, text: str, parse_mode: str = "Markdown", disable_notification: bool = False) -> Optional[str]:
         """
         发送消息
-        :return: 任务ID
+        :return: 任务ID(bridge模式)或消息ID(telegram模式)，失败返回None
         """
         if not self.enabled:
             return None
         
-        data = {
-            "chat_id": chat_id,
-            "text": text,
-            "parse_mode": parse_mode,
-            "disable_notification": disable_notification
-        }
-        result = self._request("POST", "/api/v1/message/send", json=data)
-        return result.get('task_id') if result else None
+        if self.mode == 'telegram':
+            # 直接调用Telegram原生API
+            url = f"{self.telegram_api_host.rstrip('/')}/bot{self.bot_token}/sendMessage"
+            data = {
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": parse_mode,
+                "disable_notification": disable_notification
+            }
+            try:
+                response = requests.post(url, json=data, timeout=10)
+                response.raise_for_status()
+                result = response.json()
+                if result.get('ok'):
+                    msg_id = result['result']['message_id']
+                    logger.debug(f"Telegram消息发送成功，消息ID: {msg_id}")
+                    return str(msg_id)
+                else:
+                    logger.error(f"Telegram API返回错误: {result.get('description')}")
+                    return None
+            except Exception as e:
+                logger.error(f"调用Telegram API发送消息失败: {str(e)}")
+                return None
+        else:
+            # Bridge模式
+            data = {
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": parse_mode,
+                "disable_notification": disable_notification
+            }
+            result = self._request("POST", "/api/v1/message/send", json=data)
+            return result.get('task_id') if result else None
     
     def get_new_messages(self) -> List[Dict]:
         """
