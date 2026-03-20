@@ -221,59 +221,7 @@ class MultiAppBase:
             logger.error(f"切换到应用[{window_title}]失败: {str(e)}")
             return False
     
-    # ==================== Telegram 相关方法 ====================
-    def send_message(self, text: str = '', parse_mode: str = 'HTML', 
-                             disable_notification: bool = False) -> bool:
-        """
-        发送消息到Telegram
-        :param text: 消息文本
-        :param parse_mode: 解析模式
-        :param disable_notification: 是否禁用通知
-        :return: 发送是否成功
-        """
-        if not self.telegram_client or not self.telegram_client.is_available():
-            logger.warning("Telegram客户端不可用，无法发送消息")
-            return False
-        
-        return self.telegram_client.send_message(
-            text=text,
-            parse_mode=parse_mode,
-            disable_notification=disable_notification
-        )
-    
 
-    
-    def wait_for_text(self, expected_text: str, timeout: int = 60, 
-                              case_sensitive: bool = False,
-                              sender_id: Optional[int] = None,
-                              bot_username: Optional[str] = None) -> Optional[dict]:
-        """
-        等待包含特定文本的Telegram消息
-        :param expected_text: 期望文本
-        :param timeout: 超时时间
-        :param case_sensitive: 是否区分大小写
-        :param sender_id: 可选，仅匹配指定发送者ID的消息
-        :param bot_username: 可选，仅匹配指定用户名的Bot发送的消息
-        :return: 匹配的消息
-        """
-        if not self.telegram_client or not self.telegram_client.is_available():
-            logger.warning("Telegram客户端不可用，无法等待消息")
-            return None
-        
-        return self.telegram_client.wait_for_text(
-            expected_text=expected_text,
-            timeout=timeout,
-            case_sensitive=case_sensitive,
-            sender_id=sender_id,
-            bot_username=bot_username
-        )
-    
-    # 兼容旧接口，保持向后兼容
-    def send_telegram_message(self, *args, **kwargs):
-        return self.send_message(*args, **kwargs)
-    
-    def wait_for_telegram_text(self, *args, **kwargs):
-        return self.wait_for_text(*args, **kwargs)
     
     def close_app(self, app_name: str, force: bool = False) -> bool:
         """
@@ -316,9 +264,9 @@ class MultiAppBase:
             logger.error(f"关闭应用[{window_title}]失败: {str(e)}")
             return False
     
-    def wait_for_text(self, target_text: str, timeout: int = 10, 
+    def wait_for_ocr_text(self, target_text: str, timeout: int = 10, 
                      threshold: float = 0.8, interval: float = 0.5) -> Optional[Dict]:
-        """等待当前应用中出现指定文本"""
+        """等待当前应用中出现指定OCR文本"""
         if not self.active_capture:
             logger.error("没有活跃应用，请先切换到对应应用")
             return None
@@ -331,7 +279,7 @@ class MultiAppBase:
                 return res
             time.sleep(interval)
         
-        logger.warning(f"等待文本超时: {target_text}")
+        logger.warning(f"等待OCR文本超时: {target_text}")
         return None
     
     def click_text(self, target_text: str, timeout: int = 10, 
@@ -341,7 +289,7 @@ class MultiAppBase:
             logger.error("没有活跃应用，请先切换到对应应用")
             return False
         
-        res = self.wait_for_text(target_text, timeout, threshold, interval)
+        res = self.wait_for_ocr_text(target_text, timeout, threshold, interval)
         if not res:
             logger.error(f"点击失败，未找到文本: {target_text}")
             return False
@@ -394,7 +342,7 @@ class MultiAppBase:
                     interval=step.get('interval', 0.5)
                 )
             elif step_type == 'wait':
-                return self.wait_for_text(
+                return self.wait_for_ocr_text(
                     step['text'],
                     timeout=step.get('timeout', 10),
                     interval=step.get('interval', 0.5)
