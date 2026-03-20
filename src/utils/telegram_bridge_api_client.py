@@ -26,6 +26,7 @@ class TelegramBridgeApiClient:
         self.api_key = config.get('api_key', '')
         # Telegram原生API模式配置
         self.bot_token = config.get('bot_token', '')
+        self.bot_name = config.get('bot_name', '')
         self.telegram_api_host = config.get('telegram_api_host', 'https://api.telegram.org')
         # 通用配置
         self.listen_chat_ids = config.get('listen_chat_ids', [])
@@ -137,7 +138,7 @@ class TelegramBridgeApiClient:
                 if self.listen_chat_ids and msg['chat_id'] not in self.listen_chat_ids:
                     continue
                 # 过滤自己发送的消息
-                if msg.get('source') == 'bot':
+                if msg.get('source') == 'bot' and msg.get('sender_name') == self.bot_name:
                     continue
                 new_messages.append(msg)
                 if msg_timestamp > max_timestamp:
