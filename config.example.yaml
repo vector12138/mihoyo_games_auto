@@ -5,17 +5,40 @@ global:
   retry_delay: 1                 # 重试间隔（秒）
   click_delay: 0.2               # 点击后延迟（秒）
   auto_shutdown: false           # 任务完成后自动关机
-  telegram_notify: false         # 是否开启Telegram通知
-  telegram_token: ""             # Telegram Bot Token
-  telegram_chat_id: ""           # Telegram 聊天ID
 
-# Telegram代理配置（可选）
-telegram_proxy:
-  enabled: false                 # 是否启用代理
-  url: "http://127.0.0.1:1080"  # 代理服务器地址，支持http/socks5
-  auth:                          # 代理认证（如果需要）
-    username: ""
-    password: ""
+# Telegram 统一配置
+telegram:
+  notify_enabled: false         # 是否开启Telegram通知
+  notify_token: ""              # 通知用Bot Token
+  notify_chat_id: ""            # 通知聊天ID
+  
+  # 代理配置（可选）
+  proxy:
+    enabled: false              # 是否启用代理
+    url: "http://127.0.0.1:1080" # 代理服务器地址，支持http/socks5
+    auth:                       # 代理认证（如果需要）
+      username: ""
+      password: ""
+
+  # Bridge 消息监听配置（可选，需要配合telegram-bridge-service使用）
+  bridge:
+    enabled: false              # 是否启用Telegram Bridge消息监听
+    api_url: "http://127.0.0.1:8080" # Telegram Bridge服务API地址
+    api_key: ""                 # API密钥，和telegram-bridge-service配置的api_key一致
+    listen_chat_ids: []         # 监听的聊天ID列表，为空则监听所有聊天
+    poll_interval: 1            # 消息轮询间隔（秒）
+    command_prefix: "/"         # 命令前缀，识别消息是否为控制命令
+
+  # 多机器人配置（可选，多Bot场景使用）
+  bots:
+    # 主机器人（用于发送通知和接收消息）
+    main:
+      enabled: true             # 是否启用此机器人
+      token: ""                 # Bot Token（从@BotFather获取）
+      chat_id: ""               # 聊天ID（你自己的账号ID或群组ID）
+      # 配置示例：
+      # token: "123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"
+      # chat_id: "123456789"
 
 # 游戏通用配置
 game_common:

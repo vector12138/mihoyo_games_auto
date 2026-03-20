@@ -63,7 +63,7 @@ class MultiAppBase:
         self.telegram_bridge_client = None
         if TELEGRAM_BRIDGE_AVAILABLE:
             try:
-                self.telegram_bridge_client = get_telegram_bridge_client(global_config.get('telegram_bridge', {}))
+                self.telegram_bridge_client = get_telegram_bridge_client(global_config.get('telegram', {}).get('bridge', {}))
                 if self.telegram_bridge_client and self.telegram_bridge_client.enabled:
                     logger.info("Telegram Bridge客户端初始化成功")
             except Exception as e:

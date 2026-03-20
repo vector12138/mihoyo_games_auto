@@ -40,17 +40,17 @@ def main():
     
     # 初始化通知器
     notifier = None
-    if config.get("global.telegram_notify"):
+    if config.get("telegram.notify_enabled"):
         telegram_config = {
-            'bot_token': config.get("global.telegram_token"),
-            'chat_id': config.get("global.telegram_chat_id"),
+            'bot_token': config.get("telegram.notify_token"),
+            'chat_id': config.get("telegram.notify_chat_id"),
             'enabled': True,
             'proxy': {
-                'enabled': config.get("telegram_proxy.enabled", False),
-                'url': config.get("telegram_proxy.url", ""),
+                'enabled': config.get("telegram.proxy.enabled", False),
+                'url': config.get("telegram.proxy.url", ""),
                 'auth': {
-                    'username': config.get("telegram_proxy.auth.username", ""),
-                    'password': config.get("telegram_proxy.auth.password", "")
+                    'username': config.get("telegram.proxy.auth.username", ""),
+                    'password': config.get("telegram.proxy.auth.password", "")
                 }
             }
         }
