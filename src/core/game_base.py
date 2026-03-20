@@ -240,39 +240,17 @@ class MultiAppBase:
             disable_notification=disable_notification
         )
     
-    def wait_for_message(self, timeout: int = 60, 
-                                 filter_func=None,
-                                 sender_id: Optional[str] = None,
-                                 only_user: bool = False,
-                                 only_bot: bool = False) -> Optional[dict]:
-        """
-        等待Telegram消息
-        :param timeout: 超时时间（秒）
-        :param filter_func: 过滤函数
-        :param sender_id: 可选，只等待指定发送者ID的消息
-        :param only_user: 可选，只等待普通用户的消息（排除bot消息）
-        :param only_bot: 可选，只等待其他bot发送的消息
-        :return: 匹配的消息，超时返回None
-        """
-        if not self.telegram_client or not self.telegram_client.is_available():
-            logger.warning("Telegram客户端不可用，无法等待消息")
-            return None
-        
-        return self.telegram_client.wait_for_message(
-            timeout=timeout,
-            filter_func=filter_func,
-            sender_id=sender_id,
-            only_user=only_user,
-            only_bot=only_bot
-        )
+
     
     def wait_for_text(self, expected_text: str, timeout: int = 60, 
-                              case_sensitive: bool = False) -> Optional[dict]:
+                              case_sensitive: bool = False,
+                              sender_id: Optional[int] = None) -> Optional[dict]:
         """
         等待包含特定文本的Telegram消息
         :param expected_text: 期望文本
         :param timeout: 超时时间
         :param case_sensitive: 是否区分大小写
+        :param sender_id: 可选，仅匹配指定发送者ID的消息
         :return: 匹配的消息
         """
         if not self.telegram_client or not self.telegram_client.is_available():
@@ -282,37 +260,16 @@ class MultiAppBase:
         return self.telegram_client.wait_for_text(
             expected_text=expected_text,
             timeout=timeout,
-            case_sensitive=case_sensitive
-        )
-    
-    def wait_for_command(self, command: str, timeout: int = 60) -> Optional[dict]:
-        """
-        等待特定命令的Telegram消息
-        :param command: 命令（不需要带/）
-        :param timeout: 超时时间
-        :return: 匹配的消息
-        """
-        if not self.telegram_client or not self.telegram_client.is_available():
-            logger.warning("Telegram客户端不可用，无法等待消息")
-            return None
-        
-        return self.telegram_client.wait_for_command(
-            command=command,
-            timeout=timeout
+            case_sensitive=case_sensitive,
+            sender_id=sender_id
         )
     
     # 兼容旧接口，保持向后兼容
     def send_telegram_message(self, *args, **kwargs):
         return self.send_message(*args, **kwargs)
     
-    def wait_for_telegram_message(self, *args, **kwargs):
-        return self.wait_for_message(*args, **kwargs)
-    
     def wait_for_telegram_text(self, *args, **kwargs):
         return self.wait_for_text(*args, **kwargs)
-    
-    def wait_for_telegram_command(self, *args, **kwargs):
-        return self.wait_for_command(*args, **kwargs)
     
     def close_app(self, app_name: str, force: bool = False) -> bool:
         """
@@ -578,40 +535,13 @@ class MultiAppBase:
                     disable_notification=disable_notification
                 )
             
-            elif step_type == 'wait_for_telegram_message':
-                # 等待Telegram消息
-                bot_name = step.get('bot_name', 'default')
-                timeout = step.get('timeout', 60)
-                
-                # 可选的消息过滤函数（通过lambda表达式字符串）
-                filter_func_str = step.get('filter_func')
-                filter_func = None
-                if filter_func_str:
-                    try:
-                        # 注意：这里使用eval，确保安全性
-                        filter_func = eval(filter_func_str)
-                    except Exception as e:
-                        logger.error(f"解析过滤函数失败: {str(e)}")
-                        return False
-                
-                message = self.wait_for_telegram_message(
-                    bot_name=bot_name,
-                    timeout=timeout,
-                    filter_func=filter_func
-                )
-                
-                # 保存收到的消息到step_result，供后续步骤使用
-                if message:
-                    step['_result'] = message
-                    return True
-                return False
-            
             elif step_type == 'wait_for_telegram_text':
                 # 等待特定文本的Telegram消息
                 bot_name = step.get('bot_name', 'default')
                 expected_text = step.get('expected_text', '')
                 timeout = step.get('timeout', 60)
                 case_sensitive = step.get('case_sensitive', False)
+                sender_id = step.get('sender_id')
                 
                 if not expected_text:
                     logger.error("未指定期望的文本")
@@ -621,49 +551,8 @@ class MultiAppBase:
                     bot_name=bot_name,
                     expected_text=expected_text,
                     timeout=timeout,
-                    case_sensitive=case_sensitive
-                )
-                
-                if message:
-                    step['_result'] = message
-                    return True
-                return False
-            
-            elif step_type == 'wait_for_telegram_command':
-                # 等待特定命令的Telegram消息
-                bot_name = step.get('bot_name', 'default')
-                command = step.get('command', '')
-                timeout = step.get('timeout', 60)
-                
-                if not command:
-                    logger.error("未指定命令")
-                    return False
-                
-                message = self.wait_for_telegram_command(
-                    bot_name=bot_name,
-                    command=command,
-                    timeout=timeout
-                )
-                
-                if message:
-                    step['_result'] = message
-                    return True
-                return False
-            
-            elif step_type == 'wait_for_telegram_sender':
-                # 等待特定发送者的Telegram消息
-                bot_name = step.get('bot_name', 'default')
-                sender_id = step.get('sender_id')
-                timeout = step.get('timeout', 60)
-                
-                if not sender_id:
-                    logger.error("未指定发送者ID")
-                    return False
-                
-                message = self.wait_for_telegram_sender(
-                    bot_name=bot_name,
-                    sender_id=sender_id,
-                    timeout=timeout
+                    case_sensitive=case_sensitive,
+                    sender_id=sender_id
                 )
                 
                 if message:
@@ -810,49 +699,16 @@ class MultiAppBase:
             logger.error(f"发送Telegram消息失败: {str(e)}")
             return False
     
-    def wait_for_telegram_message(self, bot_name: str = 'default', timeout: int = 60, 
-                                 filter_func: Optional[Callable[[Dict], bool]] = None) -> Optional[Dict]:
-        """
-        等待Telegram消息
-        :param bot_name: 机器人名称
-        :param timeout: 超时时间（秒）
-        :param filter_func: 消息过滤函数，返回True表示匹配
-        :return: 匹配的消息字典，超时返回None
-        """
-        if not self.telegram_client:
-            logger.error("Telegram客户端未初始化，无法等待消息")
-            return None
-        
-        try:
-            logger.info(f"等待Telegram机器人 '{bot_name}' 的消息，超时: {timeout}秒")
-            message = self.telegram_client.wait_for_message(
-                bot_name=bot_name,
-                timeout=timeout,
-                filter_func=filter_func
-            )
-            
-            if message:
-                sender = message.get('from', {})
-                sender_name = sender.get('first_name', '') + ' ' + sender.get('last_name', '')
-                sender_name = sender_name.strip() or sender.get('username', '未知用户')
-                text = message.get('text', '')
-                logger.info(f"收到Telegram消息: {sender_name} -> {text[:50]}{'...' if len(text) > 50 else ''}")
-            else:
-                logger.warning(f"等待Telegram消息超时")
-            
-            return message
-        except Exception as e:
-            logger.error(f"等待Telegram消息失败: {str(e)}")
-            return None
-    
     def wait_for_telegram_text(self, bot_name: str = 'default', expected_text: str = '', 
-                              timeout: int = 60, case_sensitive: bool = False) -> Optional[Dict]:
+                              timeout: int = 60, case_sensitive: bool = False,
+                              sender_id: Optional[int] = None) -> Optional[Dict]:
         """
         等待特定文本的Telegram消息
         :param bot_name: 机器人名称
         :param expected_text: 期望的文本
         :param timeout: 超时时间（秒）
         :param case_sensitive: 是否区分大小写
+        :param sender_id: 可选，仅匹配指定发送者ID的消息
         :return: 匹配的消息字典，超时返回None
         """
         if not self.telegram_client:
@@ -865,7 +721,8 @@ class MultiAppBase:
                 bot_name=bot_name,
                 expected_text=expected_text,
                 timeout=timeout,
-                case_sensitive=case_sensitive
+                case_sensitive=case_sensitive,
+                sender_id=sender_id
             )
             
             if message:
@@ -877,69 +734,4 @@ class MultiAppBase:
             return message
         except Exception as e:
             logger.error(f"等待Telegram文本消息失败: {str(e)}")
-            return None
-    
-    def wait_for_telegram_command(self, bot_name: str = 'default', command: str = '', 
-                                 timeout: int = 60) -> Optional[Dict]:
-        """
-        等待特定命令的Telegram消息
-        :param bot_name: 机器人名称
-        :param command: 命令（不带斜杠）
-        :param timeout: 超时时间（秒）
-        :return: 匹配的消息字典，超时返回None
-        """
-        if not self.telegram_client:
-            logger.error("Telegram客户端未初始化，无法等待消息")
-            return None
-        
-        try:
-            logger.info(f"等待Telegram机器人 '{bot_name}' 的命令: '/{command}'，超时: {timeout}秒")
-            message = self.telegram_client.wait_for_command(
-                bot_name=bot_name,
-                command=command,
-                timeout=timeout
-            )
-            
-            if message:
-                sender = message.get('from', {})
-                sender_name = sender.get('first_name', '') + ' ' + sender.get('last_name', '')
-                sender_name = sender_name.strip() or sender.get('username', '未知用户')
-                logger.info(f"收到Telegram命令: {sender_name} -> '/{command}'")
-            
-            return message
-        except Exception as e:
-            logger.error(f"等待Telegram命令失败: {str(e)}")
-            return None
-    
-    def wait_for_telegram_sender(self, bot_name: str = 'default', sender_id: int = None, 
-                                timeout: int = 60) -> Optional[Dict]:
-        """
-        等待特定发送者的Telegram消息
-        :param bot_name: 机器人名称
-        :param sender_id: 发送者ID
-        :param timeout: 超时时间（秒）
-        :return: 匹配的消息字典，超时返回None
-        """
-        if not self.telegram_client:
-            logger.error("Telegram客户端未初始化，无法等待消息")
-            return None
-        
-        try:
-            logger.info(f"等待Telegram机器人 '{bot_name}' 的发送者ID: {sender_id} 的消息，超时: {timeout}秒")
-            message = self.telegram_client.wait_for_sender(
-                bot_name=bot_name,
-                sender_id=sender_id,
-                timeout=timeout
-            )
-            
-            if message:
-                sender = message.get('from', {})
-                sender_name = sender.get('first_name', '') + ' ' + sender.get('last_name', '')
-                sender_name = sender_name.strip() or sender.get('username', '未知用户')
-                text = message.get('text', '')
-                logger.info(f"收到指定发送者的Telegram消息: {sender_name} -> {text[:50]}{'...' if len(text) > 50 else ''}")
-            
-            return message
-        except Exception as e:
-            logger.error(f"等待Telegram发送者消息失败: {str(e)}")
             return None
