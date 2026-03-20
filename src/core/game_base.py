@@ -41,9 +41,14 @@ class MultiAppBase:
             raise ValueError("多应用配置不能为空，请在配置中添加apps字段")
         
         # 全局组件
-        self.ocr = OCRRecognizer(use_gpu=global_config.get('use_gpu', True),
-                                 enabled=global_config.get('ocr_enabled', True),
-                                 debug=global_config.get('debug', False))
+        ocr_enabled = global_config.get('ocr_enabled', True)
+        if ocr_enabled:
+            self.ocr = OCRRecognizer(use_gpu=global_config.get('use_gpu', True),
+                                     debug=global_config.get('debug', False))
+            logger.info("OCR识别功能已启用")
+        else:
+            self.ocr = None
+            logger.info("⚠️ OCR识别功能已禁用")
         
         self.input_controller = InputController(
             click_delay=global_config.get('click_delay', 0.2),
@@ -267,8 +272,8 @@ class MultiAppBase:
     def wait_for_ocr_text(self, target_text: str, timeout: int = 10, 
                      threshold: float = 0.8, interval: float = 0.5) -> Optional[Dict]:
         """等待当前应用中出现指定OCR文本"""
-        if not self.active_capture:
-            logger.error("没有活跃应用，请先切换到对应应用")
+        if not self.active_capture or not self.ocr:
+            logger.error("没有活跃应用或OCR功能未启用，无法等待文本")
             return None
         
         start_time = time.time()

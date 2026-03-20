@@ -6,20 +6,14 @@ from loguru import logger
 class OCRRecognizer:
     """PaddleOCR封装，识别图像中的文本和位置"""
     
-    def __init__(self, lang: str = 'ch', use_gpu: bool = True, enabled: bool = True, debug: bool = False):
+    def __init__(self, lang: str = 'ch', use_gpu: bool = True, debug: bool = False):
         """
         初始化OCR识别器
         :param lang: 语言，默认中文
         :param use_gpu: 是否使用GPU加速
-        :param enabled: 是否启用OCR功能
         """
         self.debug = debug
-        self.enabled = enabled
-        
-        if not self.enabled:
-            logger.info("⚠️ OCR识别功能已禁用，跳过初始化")
-            self.ocr = None
-            return
+
 
         logger.info("初始化OCR识别器...")
         # 新版本PaddleOCR使用device参数替代use_gpu
@@ -41,9 +35,6 @@ class OCRRecognizer:
         :param threshold: 置信度阈值，低于这个值的结果会被过滤
         :return: 识别结果列表，每个元素包含text, confidence, bbox
         """
-        if not self.enabled or not self.ocr:
-            logger.debug("OCR功能已禁用，跳过识别")
-            return []
         
         result = self.ocr.predict(image)
         
