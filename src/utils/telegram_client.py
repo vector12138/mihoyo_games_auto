@@ -259,7 +259,7 @@ class TelegramClient:
             url = f"https://api.telegram.org/bot{self.bot_token}/getUpdates"
             params = {
                 'timeout': timeout,
-                'allowed_updates': ['message'],
+                'allowed_updates': ['message', 'channel_post'],  # 同时监听普通消息和频道消息
                 'offset': self.last_update_id + 1 if self.last_update_id else None
             }
             
@@ -320,46 +320,69 @@ class TelegramClient:
             updates = self.get_updates(timeout=min(10, remaining_time))
             
             for update in updates:
-                message = update.get('message', {})
+                # 同时支持普通消息和频道消息
+                message = update.get('message', {}) or update.get('channel_post', {})
                 if not message:
                     continue
+                
+                # 标记消息来源类型
+                message['_is_channel_post'] = 'channel_post' in update
                 
                 # 只处理来自配置的聊天ID的消息
                 if str(message.get('chat', {}).get('id', '')) != str(self.chat_id):
                     logger.debug(f"忽略来自其他聊天的消息: {message.get('chat', {}).get('id')}")
                     continue
                 
-                # 发送者ID过滤
-                if sender_id:
-                    message_sender_id = str(message.get('from', {}).get('id', ''))
+                # 发送者ID过滤（兼容频道消息没有from字段的情况）
+                sender_info = message.get('from', {})
+                if sender_id and sender_info:
+                    message_sender_id = str(sender_info.get('id', ''))
                     if message_sender_id != str(sender_id):
                         logger.debug(f"忽略来自其他发送者的消息: {message_sender_id}")
                         continue
                 
-                # 仅用户消息过滤
-                if only_user:
-                    is_bot = message.get('from', {}).get('is_bot', False)
+                # 仅用户消息过滤（需要有from字段才能判断）
+                if only_user and sender_info:
+                    is_bot = sender_info.get('is_bot', False)
                     if is_bot:
                         logger.debug("忽略Bot发送的消息")
                         continue
                 
-                # 仅Bot消息过滤
-                if only_bot:
-                    is_bot = message.get('from', {}).get('is_bot', False)
+                # 仅Bot消息过滤（需要有from字段才能判断）
+                if only_bot and sender_info:
+                    is_bot = sender_info.get('is_bot', False)
                     if not is_bot:
                         logger.debug("忽略普通用户发送的消息")
                         continue
                 
                 # 如果没有过滤函数，直接返回第一条匹配的消息
                 if filter_func is None:
-                    sender_type = "Bot" if message.get('from', {}).get('is_bot', False) else "用户"
-                    logger.info(f"收到{sender_type}消息: {message.get('text', '')[:50]}...")
+                    if message.get('_is_channel_post'):
+                        source = "频道"
+                    else:
+                        source = "群/私聊"
+                    
+                    if sender_info:
+                        sender_type = "Bot" if sender_info.get('is_bot', False) else "用户"
+                    else:
+                        sender_type = "匿名消息"
+                    
+                    logger.info(f"收到{source}{sender_type}消息: {message.get('text', '')[:50]}...")
                     return message
                 
                 # 使用过滤函数匹配
                 if filter_func(message):
-                    sender_type = "Bot" if message.get('from', {}).get('is_bot', False) else "用户"
-                    logger.info(f"收到匹配的{sender_type}消息: {message.get('text', '')[:50]}...")
+                    if message.get('_is_channel_post'):
+                        source = "频道"
+                    else:
+                        source = "群/私聊"
+                    
+                    if sender_info:
+                        sender_type = "Bot" if sender_info.get('is_bot', False) else "用户"
+                    else:
+                        sender_type = "匿名消息"
+                    
+                    logger.info(f"收到匹配的{source}{sender_type}消息: {message.get('text', '')[:50]}...")
                     return message
             
             # 短暂休眠避免频繁请求
