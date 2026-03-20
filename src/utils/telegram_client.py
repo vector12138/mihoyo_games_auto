@@ -392,19 +392,44 @@ class TelegramClient:
         return None
     
     def wait_for_text(self, expected_text: str, timeout: int = 60, 
-                     case_sensitive: bool = False) -> Optional[Dict]:
+                     case_sensitive: bool = False,
+                     sender_id: Optional[int] = None,
+                     bot_username: Optional[str] = None) -> Optional[Dict]:
         """
         等待包含特定文本的消息
         :param expected_text: 期望的文本
         :param timeout: 超时时间（秒）
         :param case_sensitive: 是否区分大小写
+        :param sender_id: 可选，仅匹配指定发送者ID的消息
+        :param bot_username: 可选，仅匹配指定用户名的Bot发送的消息
         :return: 匹配的消息字典，超时返回None
         """
         def filter_func(message):
+            # 文本匹配
             text = message.get('text', '')
             if not case_sensitive:
-                return expected_text.lower() in text.lower()
-            return expected_text in text
+                text_match = expected_text.lower() in text.lower()
+            else:
+                text_match = expected_text in text
+            
+            if not text_match:
+                return False
+            
+            # 发送者ID匹配
+            if sender_id is not None:
+                sender_info = message.get('from', {})
+                if not sender_info or sender_info.get('id') != sender_id:
+                    return False
+            
+            # Bot用户名匹配
+            if bot_username is not None:
+                sender_info = message.get('from', {})
+                if not sender_info or not sender_info.get('is_bot', False):
+                    return False
+                if sender_info.get('username', '').lower() != bot_username.lower():
+                    return False
+            
+            return True
         
         return self.wait_for_message(timeout=timeout, filter_func=filter_func)
     
