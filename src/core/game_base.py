@@ -16,13 +16,13 @@ import win32process
 import ctypes
 from .control_operator import ControlOperator, ControlInfo
 
-# 尝试导入Telegram客户端
+# 尝试导入Telegram Bridge客户端
 try:
-    from ..utils.telegram_client import get_telegram_client
-    TELEGRAM_AVAILABLE = True
+    from ..utils.telegram_bridge_api_client import get_telegram_bridge_client
+    TELEGRAM_BRIDGE_AVAILABLE = True
 except ImportError:
-    TELEGRAM_AVAILABLE = False
-    logger.warning("Telegram模块不可用，相关功能将被禁用")
+    TELEGRAM_BRIDGE_AVAILABLE = False
+    logger.warning("Telegram Bridge模块不可用，相关功能将被禁用")
 
 # 第一步：设置系统权限（允许设置前台窗口）
 
@@ -41,7 +41,8 @@ class MultiAppBase:
             raise ValueError("多应用配置不能为空，请在配置中添加apps字段")
         
         # 全局组件
-        self.ocr = OCRRecognizer(use_gpu=global_config.get('use_gpu', True), 
+        self.ocr = OCRRecognizer(use_gpu=global_config.get('use_gpu', True),
+                                 enabled=global_config.get('ocr_enabled', True),
                                  debug=global_config.get('debug', False))
         
         self.input_controller = InputController(
@@ -53,16 +54,16 @@ class MultiAppBase:
         # 控件操作器
         self.control_operator = ControlOperator(global_config.get('control_operator', {}))
         
-        # Telegram客户端（如果可用）
-        self.telegram_client = None
-        if TELEGRAM_AVAILABLE:
+        # Telegram Bridge客户端（如果可用）
+        self.telegram_bridge_client = None
+        if TELEGRAM_BRIDGE_AVAILABLE:
             try:
-                self.telegram_client = get_telegram_client(global_config)
-                if self.telegram_client and self.telegram_client.is_available():
-                    logger.info("Telegram客户端初始化成功")
+                self.telegram_bridge_client = get_telegram_bridge_client(global_config.get('telegram_bridge', {}))
+                if self.telegram_bridge_client and self.telegram_bridge_client.enabled:
+                    logger.info("Telegram Bridge客户端初始化成功")
             except Exception as e:
-                logger.error(f"初始化Telegram客户端失败: {str(e)}")
-                self.telegram_client = None
+                logger.error(f"初始化Telegram Bridge客户端失败: {str(e)}")
+                self.telegram_bridge_client = None
         
         # 应用状态管理
         self.app_states: Dict[str, Dict[str, Any]] = {}  # 每个应用的状态
@@ -540,24 +541,20 @@ class MultiAppBase:
             
             elif step_type == 'wait_for_telegram_text':
                 # 等待特定文本的Telegram消息
-                bot_name = step.get('bot_name', 'default')
                 expected_text = step.get('expected_text', '')
                 timeout = step.get('timeout', 60)
                 case_sensitive = step.get('case_sensitive', False)
                 sender_id = step.get('sender_id')
-                bot_username = step.get('bot_username')
                 
                 if not expected_text:
                     logger.error("未指定期望的文本")
                     return False
                 
                 message = self.wait_for_telegram_text(
-                    bot_name=bot_name,
                     expected_text=expected_text,
                     timeout=timeout,
                     case_sensitive=case_sensitive,
-                    sender_id=sender_id,
-                    bot_username=bot_username
+                    sender_id=sender_id
                 )
                 
                 if message:
@@ -704,45 +701,47 @@ class MultiAppBase:
             logger.error(f"发送Telegram消息失败: {str(e)}")
             return False
     
-    def wait_for_telegram_text(self, bot_name: str = 'default', expected_text: str = '', 
+    def wait_for_telegram_text(self, expected_text: str = '', 
                               timeout: int = 60, case_sensitive: bool = False,
-                              sender_id: Optional[int] = None,
-                              bot_username: Optional[str] = None) -> Optional[Dict]:
+                              sender_id: Optional[int] = None, **kwargs) -> Optional[Dict]:
         """
         等待特定文本的Telegram消息
-        :param bot_name: 机器人名称
-        :param expected_text: 期望的文本
+        :param expected_text: 期望的文本，为空则等待任意文本
         :param timeout: 超时时间（秒）
         :param case_sensitive: 是否区分大小写
         :param sender_id: 可选，仅匹配指定发送者ID的消息
-        :param bot_username: 可选，仅匹配指定用户名的Bot发送的消息
         :return: 匹配的消息字典，超时返回None
         """
-        if not self.telegram_client:
-            logger.error("Telegram客户端未初始化，无法等待消息")
+        if not self.telegram_bridge_client or not self.telegram_bridge_client.enabled:
+            logger.error("Telegram Bridge客户端未初始化或未启用，无法等待消息")
             return None
         
         try:
             filter_desc = []
             if sender_id:
                 filter_desc.append(f"发送者ID: {sender_id}")
-            if bot_username:
-                filter_desc.append(f"目标Bot: @{bot_username}")
                 
-            logger.info(f"等待Telegram机器人 '{bot_name}' 的文本消息: '{expected_text}'，超时: {timeout}秒，过滤条件: {', '.join(filter_desc) if filter_desc else '无'}")
-            message = self.telegram_client.wait_for_text(
-                expected_text=expected_text,
-                timeout=timeout,
-                case_sensitive=case_sensitive,
-                sender_id=sender_id,
-                bot_username=bot_username
-            )
+            logger.info(f"等待Telegram文本消息: '{expected_text}'，超时: {timeout}秒，过滤条件: {', '.join(filter_desc) if filter_desc else '无'}")
+            
+            # 定义过滤函数
+            def filter_func(msg):
+                # 过滤发送者ID
+                if sender_id and msg.get('sender_id') != sender_id:
+                    return False
+                # 过滤文本内容
+                text = msg.get('text', '').strip()
+                if not expected_text:
+                    return True
+                if case_sensitive:
+                    return expected_text in text
+                else:
+                    return expected_text.lower() in text.lower()
+            
+            message = self.telegram_bridge_client.wait_for_message(timeout=timeout, filter_func=filter_func)
             
             if message:
-                sender = message.get('from', {})
-                sender_name = sender.get('first_name', '') + ' ' + sender.get('last_name', '')
-                sender_name = sender_name.strip() or sender.get('username', '未知用户')
-                logger.info(f"收到期望的Telegram文本消息: {sender_name} -> '{expected_text}'")
+                sender_name = message.get('sender_name', '未知用户')
+                logger.info(f"收到期望的Telegram文本消息: {sender_name} -> '{message.get('text', '')}'")
             
             return message
         except Exception as e:
