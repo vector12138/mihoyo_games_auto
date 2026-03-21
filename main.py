@@ -70,6 +70,7 @@ def main():
     # 执行每个游戏的自动化
     success_count = 0
     total_count = len(games_to_run)
+    all_game_results = []
     
     for game_name, game_config, GameClass in games_to_run:
         logger.info(f"=== 开始处理{game_name}任务")
@@ -79,28 +80,38 @@ def main():
             game = GameClass(game_config, global_config=config.get("global"))
             result = game.run()
             
-            if result:
+            if result["success"]:
                 success_count += 1
                 logger.info(f"{game_name}任务执行成功")
+                msg = f"✅ {game_name}任务执行成功\n📊 步骤完成: {result['success_count']}/{result['total_steps']}"
+                all_game_results.append(msg)
                 if notifier:
-                    notifier.send_message(f"✅ {game_name}任务执行成功")
+                    notifier.send_message(msg)
             else:
                 logger.error(f"{game_name}任务执行失败")
+                failed_steps_str = '\n'.join(result["failed_steps"])
+                msg = f"❌ {game_name}任务执行失败\n📊 步骤完成: {result['success_count']}/{result['total_steps']}\n❌ 失败步骤:\n{failed_steps_str}"
+                all_game_results.append(msg)
                 if notifier:
-                    notifier.send_message(f"❌ {game_name}任务执行失败")
+                    notifier.send_message(msg)
         
         except Exception as e:
             logger.error(f"{game_name}任务执行出错: {str(e)}")
             import traceback
             print(traceback.format_exc())
+            msg = f"❌ {game_name}任务执行出错: {str(e)}"
+            all_game_results.append(msg)
             if notifier:
-                notifier.send_message(f"❌ {game_name}任务执行出错: {str(e)}")
+                notifier.send_message(msg)
     
     # 任务完成
     logger.info(f"=== 所有任务执行完成 成功: {success_count}/{total_count}")
     
     if notifier:
-        notifier.send_message(f"🎮 所有任务执行完成 成功: {success_count}/{total_count}")
+        # 汇总所有游戏结果发送总通知
+        all_results_str = '\n'.join(all_game_results)
+        total_msg = f"🎮 所有任务执行完成 成功: {success_count}/{total_count}\n\n{all_results_str}"
+        notifier.send_message(total_msg)
     
     # 自动关机
     if config.get("global.auto_shutdown"):
