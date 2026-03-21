@@ -15,56 +15,12 @@ from games.zzz import ZenlessZoneZero
 from src.utils import get_telegram_bridge_client
 from src.utils.util import run_as_admin
 from src.core import shutdown
-
-# 音量控制相关（完全无第三方依赖，使用Windows自带SAPI接口，100%兼容）
-VOLUME_CONTROL_AVAILABLE = False
-_original_volume = 0  # 保存原始音量值(0-100)
-_sapi_voice = None
-
-# 使用Windows自带的SAPI语音接口控制系统音量，所有Windows版本通用
-try:
-    import win32com.client
-    _sapi_voice = win32com.client.Dispatch("SAPI.SpVoice")
-    VOLUME_CONTROL_AVAILABLE = True
-    logger.info("全局音量控制模块初始化成功（Windows SAPI接口，100%兼容）")
-except Exception as e:
-    logger.warning(f"音量控制初始化失败: {str(e)}，将跳过静音功能")
-
-
-def mute_system_volume() -> bool:
-    """全局静音系统音量，保存当前音量状态"""
-    if not VOLUME_CONTROL_AVAILABLE or not _sapi_voice:
-        return False
-    
-    try:
-        global _original_volume
-        # 保存当前音量（范围0-100）
-        _original_volume = _sapi_voice.Volume
-        # 设置音量为0实现静音
-        _sapi_voice.Volume = 0
-        logger.info(f"系统已全局静音，原始音量: {_original_volume}%")
-        return True
-    except Exception as e:
-        logger.warning(f"静音失败: {str(e)}")
-        return False
-
-
-def restore_system_volume() -> bool:
-    """全局恢复系统音量到静音前的状态"""
-    if not VOLUME_CONTROL_AVAILABLE or not _sapi_voice:
-        return False
-    
-    try:
-        # 恢复原始音量
-        _sapi_voice.Volume = _original_volume
-        logger.info(f"系统音量已全局恢复到原始状态: {_original_volume}%")
-        return True
-    except Exception as e:
-        logger.warning(f"恢复音量失败: {str(e)}")
-        return False
+from src.utils import mute_system_volume, unmute_system_volume
 
 # 配置日志
 setup_logging()
+
+# init_volume_control()
 
 # 启动时检测权限，无管理员权限则自动提权
 if not run_as_admin():
@@ -173,7 +129,7 @@ def main():
             shutdown(delay=60)
     finally:
         # 无论任务是否成功、是否出错，都全局恢复音量
-        restore_system_volume()
+        unmute_system_volume()
 
 
 if __name__ == "__main__":
