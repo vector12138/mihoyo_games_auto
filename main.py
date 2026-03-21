@@ -16,36 +16,33 @@ from src.utils import get_telegram_bridge_client
 from src.utils.util import run_as_admin
 from src.core import shutdown
 
-# 音量控制相关（完全无第三方依赖，使用Windows原生API）
+# 音量控制相关（完全无第三方依赖，使用Windows自带SAPI接口，100%兼容）
 VOLUME_CONTROL_AVAILABLE = False
-winmm = None
-_original_winmm_volume = 0  # 保存原始音量值
+_original_volume = 0  # 保存原始音量值(0-100)
+_sapi_voice = None
 
-# 直接使用Windows系统自带的winmm.dll，无需任何第三方库
+# 使用Windows自带的SAPI语音接口控制系统音量，所有Windows版本通用
 try:
-    winmm = ctypes.WinDLL("winmm.dll")
-    # 声明函数参数类型
-    winmm.waveOutGetVolume.argtypes = [ctypes.c_uint, ctypes.POINTER(ctypes.c_uint)]
-    winmm.waveOutSetVolume.argtypes = [ctypes.c_uint, ctypes.c_uint]
+    import win32com.client
+    _sapi_voice = win32com.client.Dispatch("SAPI.SpVoice")
     VOLUME_CONTROL_AVAILABLE = True
-    logger.info("全局音量控制模块初始化成功（Windows原生API，无第三方依赖）")
+    logger.info("全局音量控制模块初始化成功（Windows SAPI接口，100%兼容）")
 except Exception as e:
     logger.warning(f"音量控制初始化失败: {str(e)}，将跳过静音功能")
 
 
 def mute_system_volume() -> bool:
     """全局静音系统音量，保存当前音量状态"""
-    if not VOLUME_CONTROL_AVAILABLE or not winmm:
+    if not VOLUME_CONTROL_AVAILABLE or not _sapi_voice:
         return False
     
     try:
-        global _original_winmm_volume
-        # 获取当前音量
-        _original_winmm_volume = ctypes.c_uint()
-        winmm.waveOutGetVolume(0, ctypes.byref(_original_winmm_volume))
-        # 设置音量为0（双声道同时静音）
-        winmm.waveOutSetVolume(0, 0)
-        logger.info("系统已全局静音")
+        global _original_volume
+        # 保存当前音量（范围0-100）
+        _original_volume = _sapi_voice.Volume
+        # 设置音量为0实现静音
+        _sapi_voice.Volume = 0
+        logger.info(f"系统已全局静音，原始音量: {_original_volume}%")
         return True
     except Exception as e:
         logger.warning(f"静音失败: {str(e)}")
@@ -54,13 +51,13 @@ def mute_system_volume() -> bool:
 
 def restore_system_volume() -> bool:
     """全局恢复系统音量到静音前的状态"""
-    if not VOLUME_CONTROL_AVAILABLE or not winmm:
+    if not VOLUME_CONTROL_AVAILABLE or not _sapi_voice:
         return False
     
     try:
         # 恢复原始音量
-        winmm.waveOutSetVolume(0, _original_winmm_volume.value)
-        logger.info("系统音量已全局恢复到原始状态")
+        _sapi_voice.Volume = _original_volume
+        logger.info(f"系统音量已全局恢复到原始状态: {_original_volume}%")
         return True
     except Exception as e:
         logger.warning(f"恢复音量失败: {str(e)}")
