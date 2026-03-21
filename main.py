@@ -16,86 +16,37 @@ from src.utils import get_telegram_bridge_client
 from src.utils.util import run_as_admin
 from src.core import shutdown
 
-# 音量控制相关导入
+# 音量控制相关（完全无第三方依赖，使用Windows原生API）
 VOLUME_CONTROL_AVAILABLE = False
-_volume_interface = None
-_original_volume = 0
-_original_mute = False
-_use_winmm_fallback = False
 winmm = None
+_original_winmm_volume = 0  # 保存原始音量值
 
-# 先尝试pycaw方式
+# 直接使用Windows系统自带的winmm.dll，无需任何第三方库
 try:
-    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-    from comtypes import CLSCTX_ALL, GUID
+    winmm = ctypes.WinDLL("winmm.dll")
+    # 声明函数参数类型
+    winmm.waveOutGetVolume.argtypes = [ctypes.c_uint, ctypes.POINTER(ctypes.c_uint)]
+    winmm.waveOutSetVolume.argtypes = [ctypes.c_uint, ctypes.c_uint]
     VOLUME_CONTROL_AVAILABLE = True
-    
-    # 初始化音量控制，兼容不同版本pycaw
-    try:
-        # 方式1：常规获取扬声器设备
-        devices = AudioUtilities.GetSpeakers()
-        if hasattr(devices, 'Activate'):
-            interface = devices.Activate(
-                IAudioEndpointVolume._iid_, CLSCTX_ALL, None
-            )
-            _volume_interface = ctypes.cast(interface, ctypes.POINTER(IAudioEndpointVolume))
-            logger.info("全局音量控制模块初始化成功（pycaw方式）")
-        else:
-            # 方式2：尝试通过枚举音频端点获取接口（兼容旧版pycaw）
-            from pycaw.pycaw import IMMDeviceEnumerator, IMMDevice
-            from comtypes import CoCreateInstance
-            CLSID_MMDeviceEnumerator = GUID("{BCDE0395-E52F-467C-8E3D-C4579291692E}")
-            IID_IMMDeviceEnumerator = GUID("{A95664D2-9614-4F35-A746-DE8DB6367D42}")
-            enumerator = CoCreateInstance(CLSID_MMDeviceEnumerator, IID_IMMDeviceEnumerator, CLSCTX_ALL)
-            default_device = enumerator.GetDefaultAudioEndpoint(0, 1)
-            interface = default_device.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            _volume_interface = ctypes.cast(interface, ctypes.POINTER(IAudioEndpointVolume))
-            logger.info("全局音量控制模块初始化成功（兼容旧版pycaw方式）")
-    except Exception as e:
-        logger.warning(f"pycaw方式初始化失败: {str(e)}，尝试使用Windows原生API方式")
-        # 方式3：使用winmm.dll原生API作为后备方案
-        try:
-            winmm = ctypes.WinDLL("winmm.dll")
-            _use_winmm_fallback = True
-            logger.info("全局音量控制模块初始化成功（Windows原生API方式）")
-        except Exception as e2:
-            logger.warning(f"Windows原生API方式也失败: {str(e2)}，将跳过静音功能")
-            VOLUME_CONTROL_AVAILABLE = False
-except ImportError:
-    logger.warning("pycaw库未安装，尝试使用Windows原生API方式")
-    # pycaw没装也尝试用winmm
-    try:
-        winmm = ctypes.WinDLL("winmm.dll")
-        _use_winmm_fallback = True
-        VOLUME_CONTROL_AVAILABLE = True
-        logger.info("全局音量控制模块初始化成功（Windows原生API方式）")
-    except Exception as e:
-        logger.warning(f"Windows原生API方式失败: {str(e)}，音量控制功能不可用")
+    logger.info("全局音量控制模块初始化成功（Windows原生API，无第三方依赖）")
+except Exception as e:
+    logger.warning(f"音量控制初始化失败: {str(e)}，将跳过静音功能")
 
 
 def mute_system_volume() -> bool:
     """全局静音系统音量，保存当前音量状态"""
-    if not VOLUME_CONTROL_AVAILABLE:
+    if not VOLUME_CONTROL_AVAILABLE or not winmm:
         return False
     
     try:
-        global _original_mute, _original_volume, _original_winmm_volume
-        if _use_winmm_fallback and winmm:
-            # Windows原生API方式：获取当前音量，设为0
-            _original_winmm_volume = ctypes.c_uint()
-            winmm.waveOutGetVolume(0, ctypes.byref(_original_winmm_volume))
-            # 设置音量为0（双声道都静音）
-            winmm.waveOutSetVolume(0, 0)
-            logger.info("系统已全局静音（Windows原生API）")
-            return True
-        elif _volume_interface:
-            # pycaw方式
-            _original_mute = _volume_interface.GetMute()
-            _original_volume = _volume_interface.GetMasterVolumeLevelScalar()
-            _volume_interface.SetMute(True, None)
-            logger.info("系统已全局静音（pycaw）")
-            return True
-        return False
+        global _original_winmm_volume
+        # 获取当前音量
+        _original_winmm_volume = ctypes.c_uint()
+        winmm.waveOutGetVolume(0, ctypes.byref(_original_winmm_volume))
+        # 设置音量为0（双声道同时静音）
+        winmm.waveOutSetVolume(0, 0)
+        logger.info("系统已全局静音")
+        return True
     except Exception as e:
         logger.warning(f"静音失败: {str(e)}")
         return False
@@ -103,22 +54,14 @@ def mute_system_volume() -> bool:
 
 def restore_system_volume() -> bool:
     """全局恢复系统音量到静音前的状态"""
-    if not VOLUME_CONTROL_AVAILABLE:
+    if not VOLUME_CONTROL_AVAILABLE or not winmm:
         return False
     
     try:
-        if _use_winmm_fallback and winmm:
-            # Windows原生API方式：恢复原音量
-            winmm.waveOutSetVolume(0, _original_winmm_volume.value)
-            logger.info("系统音量已全局恢复到原始状态（Windows原生API）")
-            return True
-        elif _volume_interface:
-            # pycaw方式
-            _volume_interface.SetMute(_original_mute, None)
-            _volume_interface.SetMasterVolumeLevelScalar(_original_volume, None)
-            logger.info("系统音量已全局恢复到原始状态（pycaw）")
-            return True
-        return False
+        # 恢复原始音量
+        winmm.waveOutSetVolume(0, _original_winmm_volume.value)
+        logger.info("系统音量已全局恢复到原始状态")
+        return True
     except Exception as e:
         logger.warning(f"恢复音量失败: {str(e)}")
         return False

@@ -8,4 +8,3 @@ python-telegram-bot>=20.0
 pyyaml>=6.0
 loguru>=0.7.0
 uiautomation>=2.0.0
-pycaw>=20240210
