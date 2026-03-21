@@ -16,15 +16,10 @@ import win32process
 import ctypes
 from .control_operator import ControlOperator, ControlInfo
 
-# 音量控制相关导入
-try:
-    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-    from ctypes import cast, POINTER
-    from comtypes import CLSCTX_ALL
-    VOLUME_CONTROL_AVAILABLE = True
-except ImportError:
-    VOLUME_CONTROL_AVAILABLE = False
-    logger.warning("pycaw库未安装，音量控制功能不可用")
+# Windows进程创建标志：独立进程，主程序退出不影响子进程
+CREATE_NEW_PROCESS_GROUP = 0x00000200
+DETACHED_PROCESS = 0x00000008
+CREATE_NO_WINDOW = 0x08000000
 
 # 尝试导入Telegram Bridge客户端
 try:
@@ -87,22 +82,6 @@ class MultiAppBase:
         
         # 操作步骤，子类需要覆盖
         self.task_steps: List[Dict] = []
-        
-        # 音量控制
-        self._volume_interface = None
-        self._original_volume = 0
-        self._original_mute = False
-        if VOLUME_CONTROL_AVAILABLE:
-            try:
-                devices = AudioUtilities.GetSpeakers()
-                interface = devices.Activate(
-                    IAudioEndpointVolume._iid_, CLSCTX_ALL, None
-                )
-                self._volume_interface = cast(interface, POINTER(IAudioEndpointVolume))
-                logger.info("音量控制模块初始化成功")
-            except Exception as e:
-                logger.warning(f"音量控制初始化失败: {str(e)}，将跳过静音功能")
-                self._volume_interface = None
         
         logger.info(f"初始化多应用自动化，包含应用: {list(self.apps_config.keys())}")
 
@@ -198,7 +177,23 @@ class MultiAppBase:
         if not notify_window:
             logger.info(f"启动应用[{window_title}]: {app_path}")
             try:
-                subprocess.Popen(app_path)
+                # 使用独立进程模式启动，主程序退出不会关闭应用
+                if app_path.lower().endswith('.exe'):
+                    # EXE应用直接启动，独立进程
+                    subprocess.Popen(
+                        app_path,
+                        creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+                        close_fds=True
+                    )
+                else:
+                    # 非EXE应用（比如快捷方式、脚本）
+                    subprocess.Popen(
+                        app_path,
+                        shell=True,
+                        creationflags=CREATE_NEW_PROCESS_GROUP,
+                        close_fds=True
+                    )
+                logger.info(f"应用[{window_title}]已独立启动，不受主程序退出影响")
             except Exception as e:
                 logger.error(f"启动应用[{window_title}]失败: {str(e)}")
                 return False
@@ -563,24 +558,17 @@ class MultiAppBase:
         total_steps = len(self.task_steps)
         failed_steps = []
         
-        # 执行任务前静音
-        self.mute_system_volume()
-        
-        try:
-            for i, step in enumerate(self.task_steps, 1):
-                step_name = step.get('name', f'步骤{i}')
-                logger.info(f"步骤 [{i}/{total_steps}] - {step_name}")
-                result = self.retry_manager.retry(lambda: self.execute_step(step))
-                
-                if not result:
-                    logger.error(f"第{i}步执行失败: {step_name}")
-                    failed_steps.append(f"❌ {step_name}")
-                    continue
-                
-                success_count += 1
-        finally:
-            # 无论任务是否成功，都恢复音量
-            self.restore_system_volume()
+        for i, step in enumerate(self.task_steps, 1):
+            step_name = step.get('name', f'步骤{i}')
+            logger.info(f"步骤 [{i}/{total_steps}] - {step_name}")
+            result = self.retry_manager.retry(lambda: self.execute_step(step))
+            
+            if not result:
+                logger.error(f"第{i}步执行失败: {step_name}")
+                failed_steps.append(f"❌ {step_name}")
+                continue
+            
+            success_count += 1
         
         logger.info(f"任务执行完成，成功{success_count}/{total_steps}步")
         return {
@@ -675,40 +663,6 @@ class MultiAppBase:
         
         hwnd = self.app_states[target_app]['hwnd']
         return self.control_operator.find_by_hierarchy(hwnd, hierarchy)
-    
-    def mute_system_volume(self) -> bool:
-        """静音系统音量，保存当前音量状态"""
-        if not self._volume_interface:
-            logger.warning("音量控制不可用，跳过静音操作")
-            return False
-        
-        try:
-            # 保存当前状态
-            self._original_mute = self._volume_interface.GetMute()
-            self._original_volume = self._volume_interface.GetMasterVolumeLevelScalar()
-            # 设置静音
-            self._volume_interface.SetMute(True, None)
-            logger.info("系统已静音")
-            return True
-        except Exception as e:
-            logger.warning(f"静音失败: {str(e)}")
-            return False
-    
-    def restore_system_volume(self) -> bool:
-        """恢复系统音量到静音前的状态"""
-        if not self._volume_interface:
-            logger.warning("音量控制不可用，跳过恢复音量操作")
-            return False
-        
-        try:
-            # 恢复原状态
-            self._volume_interface.SetMute(self._original_mute, None)
-            self._volume_interface.SetMasterVolumeLevelScalar(self._original_volume, None)
-            logger.info("系统音量已恢复到原始状态")
-            return True
-        except Exception as e:
-            logger.warning(f"恢复音量失败: {str(e)}")
-            return False
     
     def wait_for_telegram_text(self, expected_text: str = '', 
                               timeout: int = 60, case_sensitive: bool = False,
