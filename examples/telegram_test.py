@@ -10,7 +10,7 @@ import os
 import yaml
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.utils.telegram_client import TelegramClient
+from src.utils.telegram_bridge_api_client import TelegramBridgeApiClient as TelegramClient
 from loguru import logger
 
 
@@ -38,27 +38,7 @@ def test_telegram():
         return False
     
     # 构建Telegram配置
-    telegram_config = {}
-    
-    # 从全局配置加载
-    global_config = config.get('global', {})
-    if global_config.get('telegram_notify', False):
-        telegram_config = {
-            'enabled': True,
-            'bot_token': global_config.get('telegram_token', ''),
-            'chat_id': global_config.get('telegram_chat_id', ''),
-            'proxy': config.get('telegram_proxy', {})
-        }
-    
-    # 从新的配置格式加载
-    telegram_bots_config = config.get('telegram_bots', {}).get('main', {})
-    if telegram_bots_config.get('enabled', False):
-        telegram_config = {
-            'enabled': telegram_bots_config.get('enabled', False),
-            'bot_token': telegram_bots_config.get('token', ''),
-            'chat_id': telegram_bots_config.get('chat_id', ''),
-            'proxy': config.get('telegram_proxy', {})
-        }
+    telegram_config = config.get('telegram', {})
     
     # 创建客户端
     client = TelegramClient(telegram_config)
@@ -67,20 +47,16 @@ def test_telegram():
         logger.error("❌ Telegram未启用，请先在config.yaml中配置Telegram机器人信息")
         return False
     
-    # 测试1：连接测试
-    logger.info("\n1. 测试连接...")
-    if not client.test_connection():
-        logger.error("❌ 连接测试失败")
-        return False
-    logger.info("✅ 连接测试成功")
-    
     # 测试2：发送消息
     logger.info("\n2. 测试发送消息...")
     test_text = "🔧 *Telegram功能测试*\n\n这是测试消息，来自米哈游游戏自动化工具。\n*时间*: " + datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    if not client.send_message(test_text):
+    if not client.send_message(test_text, chat_id=-50437341):
         logger.error("❌ 发送消息失败")
         return False
     logger.info("✅ 发送消息成功")
+
+    def filter_test_message(msg):
+        return msg.get('sender_name', '') == 'games' and '这是一条测试消息' in msg.get('text', '')
     
     # 测试3：等待消息
     logger.info("\n3. 测试消息等待功能（请在30秒内回复任意消息）...")
@@ -91,8 +67,8 @@ def test_telegram():
         logger.info(f"✅ 收到消息: {message.get('text', '')}")
         
         # 测试文本匹配
-        logger.info("\n4. 测试文本匹配功能（请在30秒内回复包含\"测试成功\"的消息）...")
-        message = client.wait_for_text("测试成功", timeout=30)
+        logger.info("\n4. 测试文本匹配功能（请在30秒内回复包含\"这是一条测试消息\"的消息）...")
+        message = client.wait_for_message(timeout=30, filter_func=filter_test_message)
         if not message:
             logger.warning("⚠️  等待文本超时")
         else:

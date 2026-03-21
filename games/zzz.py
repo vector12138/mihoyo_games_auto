@@ -76,15 +76,10 @@ class ZenlessZoneZero(MultiAppBase):
                 'seconds': 100  # 可根据实际情况调整时间
             },
             {
-                'name': '切换到绝区零游戏窗口',
-                'type': 'switch_app',
-                'app_name': 'zzz_game'
-            },
-            {
                 'name': "检测一条龙是否运行完成",
-                'type': 'wait',
-                'text': '个人主页',
-                'interval': 10,
+                'type': 'wait_for_telegram_text',
+                'text': 'ZZZ一条龙运行通知\n一条龙运行完成',
+                'sender_id': 8445448103,
                 'timeout': 1800  # 可根据实际情况调整时间
             }
         ]
@@ -124,15 +119,10 @@ class ZenlessZoneZero(MultiAppBase):
                 'seconds': 600  # 可根据实际情况调整时间
             },
             {
-                'name': '切换到绝区零游戏窗口',
-                'type': 'switch_app',
-                'app_name': 'zzz_game'
-            },
-            {
                 'name': "检测一条龙是否运行完成",
-                'type': 'wait',
-                'text': '个人主页',
-                'interval': 10,
+                'type': 'wait_for_telegram_text',
+                'text': 'ZZZ一条龙运行通知\n一条龙运行完成',
+                'sender_id': 8445448103,
                 'timeout': 1800  # 可根据实际情况调整时间
             }
         ]

@@ -334,33 +334,33 @@ class MultiAppBase:
             elif step_type == 'close_app':
                 return self.close_app(step['app_name'], force=step.get('force', False))
             
-            # 通用操作步骤，需要当前有活跃应用
-            if not self.active_app:
-                logger.error("执行操作步骤前请先切换到对应应用")
-                return False
-            
-            if step_type == 'click':
+            elif step_type == 'click':
                 return self.click_text(
                     step['text'], 
                     timeout=step.get('timeout', 10),
                     double=step.get('double', False),
                     interval=step.get('interval', 0.5)
                 )
+            
             elif step_type == 'wait':
                 return self.wait_for_ocr_text(
                     step['text'],
                     timeout=step.get('timeout', 10),
                     interval=step.get('interval', 0.5)
                 ) is not None
+            
             elif step_type == 'sleep':
                 time.sleep(step.get('seconds', 1))
                 return True
+            
             elif step_type == 'press':
                 self.input_controller.press_key(step['key'])
                 return True
+            
             elif step_type == 'hotkey':
                 self.input_controller.hotkey(*step['keys'])
                 return True
+            
             elif step_type == 'custom':
                 func = getattr(self, step['func'])
                 return func()
@@ -494,7 +494,7 @@ class MultiAppBase:
             
             elif step_type == 'wait_for_telegram_text':
                 # 等待特定文本的Telegram消息
-                expected_text = step.get('expected_text', '')
+                expected_text = step.get('text', '')
                 timeout = step.get('timeout', 60)
                 case_sensitive = step.get('case_sensitive', False)
                 sender_id = step.get('sender_id')
