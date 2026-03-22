@@ -35,6 +35,10 @@
     control_type: TextControl
   timeout: 10
 
+- name: 等待页面切换
+  type: sleep
+  seconds: 10
+
 - name: 点击运行按钮
   type: click_control_by_hierarchy
   hierarchy:
@@ -48,9 +52,9 @@
   timeout: 10
 
 # 第四步：等待任务完成
-- name: 等待一条龙任务完成（10分钟）
+- name: 等待一条龙任务完成（5分钟）
   type: sleep
-  seconds: 600
+  seconds: 300
 
 - name: 检测一条龙是否运行完成
   type: wait_for_telegram_text

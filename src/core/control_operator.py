@@ -61,6 +61,7 @@ class BaseOperator:
     """操作器基类"""
     def __init__(self, config: Dict):
         self.config = config
+        self.search_depth = config.get("search_depth", 20)  # 默认搜索深度20
     
     def click(self, control: ControlInfo, double: bool = False) -> bool:
         """点击控件，子类实现"""
@@ -160,7 +161,7 @@ class UiaOperator(BaseOperator):
             # 优先用automation_id查找
             if control.automation_id:
                 try:
-                    uia_ctrl = root_ctrl.Control(AutomationId=control.automation_id, searchDepth=10)
+                    uia_ctrl = root_ctrl.Control(AutomationId=control.automation_id, searchDepth=self.search_depth)
                     if uia_ctrl.Exists(0):
                         logger.debug(f"通过automation_id找到控件: {control.automation_id}")
                         if double:
@@ -182,7 +183,7 @@ class UiaOperator(BaseOperator):
                     type_name = control.control_type.replace('Control', '')
                     if hasattr(auto, type_name):
                         kwargs['controlType'] = getattr(auto, type_name)
-                kwargs['searchDepth'] = 10
+                kwargs['searchDepth'] = self.search_depth
                 
                 try:
                     uia_ctrl = root_ctrl.Control(**kwargs)
@@ -225,7 +226,7 @@ class UiaOperator(BaseOperator):
             # 优先用automation_id查找
             if control.automation_id:
                 try:
-                    uia_ctrl = root_ctrl.Control(AutomationId=control.automation_id, searchDepth=10)
+                    uia_ctrl = root_ctrl.Control(AutomationId=control.automation_id, searchDepth=self.search_depth)
                     if uia_ctrl.Exists(0):
                         logger.debug(f"通过automation_id找到输入控件: {control.automation_id}")
                         uia_ctrl.SendKeys("{Ctrl}a{Del}", waitTime=0.05)
@@ -245,7 +246,7 @@ class UiaOperator(BaseOperator):
                     type_name = control.control_type.replace('Control', '')
                     if hasattr(auto, type_name):
                         kwargs['controlType'] = getattr(auto, type_name)
-                kwargs['searchDepth'] = 10
+                kwargs['searchDepth'] = self.search_depth
                 
                 try:
                     uia_ctrl = root_ctrl.Control(**kwargs)
@@ -273,7 +274,7 @@ class UiaOperator(BaseOperator):
             automation_id = properties.get('automation_id')
             if automation_id:
                 try:
-                    uia_ctrl = root_ctrl.Control(AutomationId=automation_id, searchDepth=10)
+                    uia_ctrl = root_ctrl.Control(AutomationId=automation_id, searchDepth=self.search_depth)
                     if not uia_ctrl.Exists(0):
                         uia_ctrl = None
                         logger.debug(f"UIA查找ID失败: {automation_id}")
@@ -291,7 +292,7 @@ class UiaOperator(BaseOperator):
                     type_name = properties['control_type']
                     if hasattr(auto, type_name):
                         kwargs['controlType'] = getattr(auto, type_name)
-                kwargs['searchDepth'] = 10
+                kwargs['searchDepth'] = self.search_depth
                 
                 try:
                     uia_ctrl = root_ctrl.Control(**kwargs)

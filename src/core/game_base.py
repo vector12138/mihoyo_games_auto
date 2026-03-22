@@ -6,7 +6,6 @@ import os
 from typing import List, Dict, Callable, Optional, Any
 from loguru import logger
 from .screen_capture import ScreenCapture
-from .ocr_recognizer import OCRRecognizer
 from .input_controller import InputController
 from .retry_manager import RetryManager
 
@@ -47,7 +46,9 @@ class MultiAppBase:
         
         # 全局组件
         ocr_enabled = global_config.get('ocr_enabled', True)
-        if ocr_enabled:
+        if ocr_enabled:        
+            from .ocr_recognizer import OCRRecognizer
+            # 使能才加载OCR识别器
             self.ocr = OCRRecognizer(use_gpu=global_config.get('use_gpu', True),
                                      debug=global_config.get('debug', False))
             logger.info("OCR识别功能已启用")
