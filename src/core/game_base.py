@@ -383,6 +383,83 @@ class MultiAppBase:
                 self.input_controller.hotkey(*step['keys'])
                 return True
             
+            elif step_type == 'run_command':
+                """
+                执行系统命令步骤
+                参数说明：
+                - command: 要执行的命令字符串（必填）
+                - cwd: 工作目录（可选，默认None）
+                - shell: 是否使用shell执行（可选，默认True）
+                - timeout: 命令超时时间（秒，可选，默认30）
+                - capture_output: 是否捕获命令输出（可选，默认False）
+                - background: 是否后台运行（可选，默认False，后台运行不等待结果直接返回成功）
+                - raise_on_error: 命令执行失败（返回码非0）时是否抛出异常（可选，默认False）
+                """
+                command = step.get('command')
+                if not command:
+                    logger.error("执行命令步骤缺少必填参数: command")
+                    return False
+                
+                cwd = step.get('cwd')
+                shell = step.get('shell', True)
+                timeout = step.get('timeout', 30)
+                capture_output = step.get('capture_output', False)
+                background = step.get('background', False)
+                raise_on_error = step.get('raise_on_error', False)
+                
+                logger.info(f"执行系统命令: {command}" + (f" 工作目录: {cwd}" if cwd else "") + (f" 后台运行: {background}" if background else ""))
+                
+                try:
+                    if background:
+                        # 后台运行模式，独立进程不阻塞
+                        subprocess.Popen(
+                            command,
+                            shell=shell,
+                            cwd=cwd,
+                            creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0,
+                            close_fds=True
+                        )
+                        logger.info("命令已后台执行，不等待结果")
+                        return True
+                    
+                    # 前台执行模式，等待结果
+                    result = subprocess.run(
+                        command,
+                        shell=shell,
+                        cwd=cwd,
+                        timeout=timeout,
+                        capture_output=capture_output,
+                        text=capture_output  # 捕获输出时自动解码为字符串
+                    )
+                    
+                    # 处理执行结果
+                    if result.returncode != 0:
+                        error_msg = f"命令执行失败，返回码: {result.returncode}"
+                        if capture_output:
+                            error_msg += f"\n标准错误: {result.stderr}"
+                        logger.error(error_msg)
+                        if raise_on_error:
+                            raise RuntimeError(error_msg)
+                        return False
+                    
+                    logger.info("命令执行成功")
+                    if capture_output:
+                        # 保存输出到步骤结果供后续使用
+                        step['_result'] = {
+                            'stdout': result.stdout,
+                            'stderr': result.stderr,
+                            'returncode': result.returncode
+                        }
+                        logger.debug(f"命令输出: {result.stdout}")
+                    return True
+                    
+                except subprocess.TimeoutExpired as e:
+                    logger.error(f"命令执行超时({timeout}秒): {str(e)}")
+                    return False
+                except Exception as e:
+                    logger.error(f"命令执行出错: {str(e)}")
+                    return False
+            
             elif step_type == 'custom':
                 func = getattr(self, step['func'])
                 return func()
