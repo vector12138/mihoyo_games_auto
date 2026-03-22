@@ -5,34 +5,35 @@
 """
 import os
 import sys
+
+# 启动优化：最高级别Python优化，减少内存占用
+sys.dont_write_bytecode = True
+os.environ['PYTHONOPTIMIZE'] = '2'
+os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
+os.environ['PYTHONUNBUFFERED'] = '1'
+
+# 权限检测放在最前面，避免提前加载大模块浪费内存
+from src.utils.util import run_as_admin
+if not run_as_admin():
+    print("需要管理员权限才能运行！")
+    sys.exit(1)
+
+# 延迟导入其他模块，启动时只加载必要的
 import time
 import ctypes
 from loguru import logger
 from src.config.logging_config import setup_logging
-from src.config import Config
-from games.genshin import GenshinImpact
-from games.zzz import ZenlessZoneZero
-from src.utils import get_telegram_bridge_client
-from src.utils.util import run_as_admin
-from src.core import shutdown
-from src.utils import mute_system_volume, unmute_system_volume
 
 # 配置日志
 setup_logging()
-
-# init_volume_control()
-
-# 启动时检测权限，无管理员权限则自动提权
-if not run_as_admin():
-    print("需要管理员权限才能运行！")
-    sys.exit(1)
 
 
 def main():
     logger.info("=== 米哈游游戏自动化工具启动 ===")
     
-    # 加载配置
+    # 加载配置（延迟导入配置模块）
     try:
+        from src.config import Config
         config = Config()
         debug = config.get("global.debug", False)
         if debug:
@@ -42,21 +43,24 @@ def main():
         logger.error(f"加载配置失败: {str(e)}")
         sys.exit(1)
     
-    # 所有任务执行前先全局静音
+    # 所有任务执行前先全局静音（延迟导入音量模块）
+    from src.utils import mute_system_volume, unmute_system_volume
     mute_system_volume()
     
     try:
-        # 初始化通知器
+        # 初始化通知器（按需导入）
         notifier = None
         if config.get("telegram.enabled"):
+            from src.utils import get_telegram_bridge_client
             notifier = get_telegram_bridge_client(config.get("telegram"))
             notifier.send_message("🎮 游戏自动化任务开始执行")
         
-        # 需要执行的游戏列表
+        # 需要执行的游戏列表（按需导入游戏类，避免提前加载大模块）
         games_to_run = []
         
         # 原神（统一多应用模式，自动识别是否使用BetterGI）
         if config.get("genshin.enabled"):
+            from games.genshin import GenshinImpact
             genshin_config = config.get_game_config("genshin")
             mode_str = "（BetterGI模式）"
             logger.info(f"原神已启用{mode_str}")
@@ -64,6 +68,7 @@ def main():
         
         # 绝区零（统一多应用模式，自动识别是否使用辅助工具）
         if config.get("zzz.enabled"):
+            from games.zzz import ZenlessZoneZero
             zzz_config = config.get_game_config("zzz")
             mode_str = "（多应用辅助模式）"
             logger.info(f"绝区零已启用{mode_str}")
@@ -121,8 +126,9 @@ def main():
             total_msg = f"🎮 所有任务执行完成 成功: {success_count}/{total_count}\n\n{all_results_str}"
             notifier.send_message(total_msg)
         
-        # 自动关机
+        # 自动关机（按需导入）
         if config.get("global.auto_shutdown"):
+            from src.core import shutdown
             logger.info("任务完成，即将自动关机")
             if notifier:
                 notifier.send_message("🔌 任务完成，即将自动关机")
