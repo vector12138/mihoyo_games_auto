@@ -11,7 +11,7 @@
 
 - name: "等待辅助窗口激活"
   type: "sleep"
-  seconds: 60
+  seconds: 30
 
 - name: "切换到zzz-onedragen窗口"
   type: "switch_app"
@@ -21,7 +21,9 @@
   type: "click_control_by_properties"
   properties: 
     source: "uia"
-    automation_id: "QApplication.PhosWindow.areaWidget.StackedWidget.PopUpAniStackedWidget.home_interface.SingleDirectionScrollArea.qt_scrollarea_viewport.Banner.QWidget.QWidget.start_button"
+    name: "启动一条龙🚀"
+    class_name: PrimaryPushButton
+    control_type: ButtonControl
   timeout: 10
 
 - name: "等待一条龙任务执行完成（5分钟）"
