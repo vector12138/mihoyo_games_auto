@@ -276,6 +276,7 @@ class UiaOperator(BaseOperator):
                     uia_ctrl = root_ctrl.Control(AutomationId=automation_id, searchDepth=10)
                     if not uia_ctrl.Exists(0):
                         uia_ctrl = None
+                        logger.debug(f"UIA查找ID失败: {automation_id}")
                 except Exception as e:
                     logger.debug(f"UIA查找ID失败: {str(e)}")
             
@@ -287,7 +288,7 @@ class UiaOperator(BaseOperator):
                 if properties.get('class_name'):
                     kwargs['ClassName'] = properties['class_name'].strip()
                 if properties.get('control_type'):
-                    type_name = properties['control_type'].replace('Control', '')
+                    type_name = properties['control_type']
                     if hasattr(auto, type_name):
                         kwargs['controlType'] = getattr(auto, type_name)
                 kwargs['searchDepth'] = 10

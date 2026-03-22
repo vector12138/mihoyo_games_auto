@@ -1,49 +1,59 @@
-# 原神自动化步骤配置示例
-- name: "启动BetterGI"
-  type: "launch_app"
-  app_name: "bettergi"
+# 原神自动化任务流程
+
+# 第一步：启动相关应用
+- name: 启动BetterGI工具
+  type: launch_app
+  app_name: bettergi
   timeout: 30
 
-- name: "关闭BetterGI更新弹窗"
-  type: "click"
-  text: "取消"
-  timeout: 10
-
-- name: "启动原神本体"
-  type: "launch_app"
-  app_name: "genshin_game"
-  timeout: 60
-
-- name: "等待登录界面"
-  type: "wait"
-  text: "点击进入"
+- name: 启动原神游戏
+  type: launch_app
+  app_name: genshin_game
   timeout: 30
 
-- name: "点击进入游戏"
-  type: "click"
-  text: "点击进入"
-  timeout: 10
-
-- name: "等待进入游戏主界面"
-  type: "wait"
-  text: "任务"
+- name: 检测是否有新版本弹窗
+  type: launch_app
+  app_name: bettergi_pop
   timeout: 30
 
-- name: "执行每日委托"
-  type: "switch_app"
-  app_name: "bettergi"
+# 第二步：处理新版本弹窗
+- name: 处理新版本弹窗
+  type: close_app
+  app_name: bettergi_pop
 
-- name: "点击每日委托按钮"
-  type: "click"
-  text: "每日委托"
+# 第三步：启动一条龙任务
+- name: 切换回BetterGI窗口
+  type: switch_app
+  app_name: bettergi
+
+- name: 点击一条龙按钮
+  type: click_control_by_properties
+  properties:
+    source: uia
+    name: 一条龙
+    class_name: TextBlock
+    control_type: TextControl
   timeout: 10
 
-- name: "开始执行每日委托"
-  type: "click"
-  text: "开始执行"
+- name: 点击运行按钮
+  type: click_control_by_hierarchy
+  hierarchy:
+    - source: uia
+      class_name: OneDragonFlowPage
+      control_type: CustomControl
+    - source: uia
+      name: "\uF606"  # 对应Unicode字符 \uF606
+      class_name: TextBlock
+      control_type: TextControl
   timeout: 10
 
-- name: "等待每日委托完成"
-  type: "wait"
-  text: "完成全部委托"
-  timeout: 600
+# 第四步：等待任务完成
+- name: 等待一条龙任务完成（10分钟）
+  type: sleep
+  seconds: 600
+
+- name: 检测一条龙是否运行完成
+  type: wait_for_telegram_text
+  text: "一条龙和配置组任务结束"
+  sender_id: 8445448103
+  timeout: 1800  # 可根据实际情况调整时间

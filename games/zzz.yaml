@@ -11,7 +11,7 @@
 
 - name: "等待辅助窗口激活"
   type: "sleep"
-  seconds: 10
+  seconds: 60
 
 - name: "点击一条龙按钮"
   type: "click_control_by_properties"
