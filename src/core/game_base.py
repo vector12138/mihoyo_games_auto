@@ -141,11 +141,74 @@ class MultiAppBase:
     
     def launch_app(self, app_name: str, timeout: int = 30) -> bool:
         """
-        启动指定应用
+        启动指定应用（对外公开API）
         :param app_name: 应用名称，对应配置里的key
         :param timeout: 等待窗口超时时间（秒）
         :return: 是否启动成功
         """
+        return self._step_launch_app({
+            'app_name': app_name,
+            'timeout': timeout
+        })
+    
+    def switch_app(self, app_name: str) -> bool:
+        """
+        切换到指定应用，激活窗口（对外公开API）
+        :param app_name: 应用名称
+        :return: 是否切换成功
+        """
+        return self._step_switch_app({
+            'app_name': app_name
+        })
+    
+
+    
+    def close_app(self, app_name: str, force: bool = False) -> bool:
+        """
+        关闭指定应用（对外公开API）
+        :param app_name: 应用名称
+        :param force: 是否强制关闭
+        :return: 是否关闭成功
+        """
+        return self._step_close_app({
+            'app_name': app_name,
+            'force': force
+        })
+    
+    def wait_for_ocr_text(self, target_text: str, timeout: int = 10, 
+                     threshold: float = 0.8, interval: float = 0.5) -> Optional[Dict]:
+        """等待当前应用中出现指定OCR文本（对外公开API）"""
+        # 调用_step_wait，注意保存返回的OCR结果
+        step = {
+            'text': target_text,
+            'timeout': timeout,
+            'threshold': threshold,
+            'interval': interval
+        }
+        success = self._step_wait(step)
+        return step.get('_result', None) if success else None
+    
+    def click_text(self, target_text: str, timeout: int = 10, 
+                  threshold: float = 0.8, double: bool = False, interval: float = 0.5) -> bool:
+        """点击当前应用中的指定文本（对外公开API）"""
+        return self._step_click({
+            'text': target_text,
+            'timeout': timeout,
+            'threshold': threshold,
+            'double': double,
+            'interval': interval
+        })
+    
+    # ==================== 步骤执行私有方法 ====================
+    def _step_launch_app(self, step: Dict) -> bool:
+        """
+        处理launch_app步骤（核心实现）
+        :param step: 步骤配置，包含app_name、timeout等参数
+        :return: 是否启动成功
+        """
+        app_name = step['app_name']
+        timeout = step.get('timeout', 30)
+        
         if app_name not in self.apps_config:
             logger.error(f"应用[{app_name}]未在配置中定义")
             return False
@@ -219,12 +282,14 @@ class MultiAppBase:
         logger.error(f"等待应用[{window_title}]窗口超时")
         return False
     
-    def switch_app(self, app_name: str) -> bool:
+    def _step_switch_app(self, step: Dict) -> bool:
         """
-        切换到指定应用，激活窗口
-        :param app_name: 应用名称
+        处理switch_app步骤（核心实现）
+        :param step: 步骤配置，包含app_name参数
         :return: 是否切换成功
         """
+        app_name = step['app_name']
+        
         if app_name not in self.app_states or not self.app_states[app_name]['running']:
             logger.error(f"应用[{app_name}]未运行，请先启动")
             return False
@@ -248,15 +313,14 @@ class MultiAppBase:
             logger.error(f"切换到应用[{window_title}]失败: {str(e)}")
             return False
     
-
-    
-    def close_app(self, app_name: str, force: bool = False) -> bool:
+    def _step_close_app(self, step: Dict) -> bool:
         """
-        关闭指定应用
-        :param app_name: 应用名称
-        :param force: 是否强制关闭
+        处理close_app步骤（核心实现）
+        :param step: 步骤配置，包含app_name、force等参数
         :return: 是否关闭成功
         """
+        app_name = step['app_name']
+        force = step.get('force', False)
         window_title = self.apps_config[app_name].get('window_title')
 
         if app_name not in self.app_states or not self.app_states[app_name]['running']:
@@ -291,27 +355,18 @@ class MultiAppBase:
             logger.error(f"关闭应用[{window_title}]失败: {str(e)}")
             return False
     
-    def wait_for_ocr_text(self, target_text: str, timeout: int = 10, 
-                     threshold: float = 0.8, interval: float = 0.5) -> Optional[Dict]:
-        """等待当前应用中出现指定OCR文本"""
-        if not self.active_capture or not self.ocr:
-            logger.error("没有活跃应用或OCR功能未启用，无法等待文本")
-            return None
+    def _step_click(self, step: Dict) -> bool:
+        """
+        处理click步骤（核心实现）
+        :param step: 步骤配置，包含text、timeout、double等参数
+        :return: 是否点击成功
+        """
+        target_text = step['text']
+        timeout = step.get('timeout', 10)
+        threshold = step.get('threshold', 0.8)
+        double = step.get('double', False)
+        interval = step.get('interval', 0.5)
         
-        start_time = time.time()
-        while time.time() - start_time < timeout:
-            img = self.active_capture.capture()
-            res = self.ocr.find_text(img, target_text, threshold)
-            if res:
-                return res
-            time.sleep(interval)
-        
-        logger.warning(f"等待OCR文本超时: {target_text}")
-        return None
-    
-    def click_text(self, target_text: str, timeout: int = 10, 
-                  threshold: float = 0.8, double: bool = False, interval: float = 0.5) -> bool:
-        """点击当前应用中的指定文本"""
         if not self.active_capture or not self.active_app:
             logger.error("没有活跃应用，请先切换到对应应用")
             return False
@@ -332,35 +387,33 @@ class MultiAppBase:
         logger.info(f"点击文本成功: [{target_text}] 位置: ({screen_x}, {screen_y})")
         return True
     
-    # ==================== 步骤执行私有方法 ====================
-    def _step_launch_app(self, step: Dict) -> bool:
-        """处理launch_app步骤"""
-        return self.launch_app(step['app_name'], timeout=step.get('timeout', 30))
-    
-    def _step_switch_app(self, step: Dict) -> bool:
-        """处理switch_app步骤"""
-        return self.switch_app(step['app_name'])
-    
-    def _step_close_app(self, step: Dict) -> bool:
-        """处理close_app步骤"""
-        return self.close_app(step['app_name'], force=step.get('force', False))
-    
-    def _step_click(self, step: Dict) -> bool:
-        """处理click步骤"""
-        return self.click_text(
-            step['text'], 
-            timeout=step.get('timeout', 10),
-            double=step.get('double', False),
-            interval=step.get('interval', 0.5)
-        )
-    
     def _step_wait(self, step: Dict) -> bool:
-        """处理wait步骤"""
-        return self.wait_for_ocr_text(
-            step['text'],
-            timeout=step.get('timeout', 10),
-            interval=step.get('interval', 0.5)
-        ) is not None
+        """
+        处理wait步骤（核心实现）
+        :param step: 步骤配置，包含text、timeout、threshold等参数
+        :return: 是否找到指定文本
+        """
+        target_text = step['text']
+        timeout = step.get('timeout', 10)
+        threshold = step.get('threshold', 0.8)
+        interval = step.get('interval', 0.5)
+        
+        if not self.active_capture or not self.ocr:
+            logger.error("没有活跃应用或OCR功能未启用，无法等待文本")
+            return False
+        
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            img = self.active_capture.capture()
+            res = self.ocr.find_text(img, target_text, threshold)
+            if res:
+                # 保存OCR结果到步骤结果
+                step['_result'] = res
+                return True
+            time.sleep(interval)
+        
+        logger.warning(f"等待OCR文本超时: {target_text}")
+        return False
     
     def _step_sleep(self, step: Dict) -> bool:
         """处理sleep步骤"""
