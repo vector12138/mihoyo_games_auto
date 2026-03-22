@@ -1,0 +1,49 @@
+# 原神自动化步骤配置示例
+- name: "启动BetterGI"
+  type: "launch_app"
+  app_name: "bettergi"
+  timeout: 30
+
+- name: "关闭BetterGI更新弹窗"
+  type: "click"
+  text: "取消"
+  timeout: 10
+
+- name: "启动原神本体"
+  type: "launch_app"
+  app_name: "genshin_game"
+  timeout: 60
+
+- name: "等待登录界面"
+  type: "wait"
+  text: "点击进入"
+  timeout: 30
+
+- name: "点击进入游戏"
+  type: "click"
+  text: "点击进入"
+  timeout: 10
+
+- name: "等待进入游戏主界面"
+  type: "wait"
+  text: "任务"
+  timeout: 30
+
+- name: "执行每日委托"
+  type: "switch_app"
+  app_name: "bettergi"
+
+- name: "点击每日委托按钮"
+  type: "click"
+  text: "每日委托"
+  timeout: 10
+
+- name: "开始执行每日委托"
+  type: "click"
+  text: "开始执行"
+  timeout: 10
+
+- name: "等待每日委托完成"
+  type: "wait"
+  text: "完成全部委托"
+  timeout: 600

@@ -55,24 +55,17 @@ def main():
             notifier = get_telegram_bridge_client(config.get("telegram"))
             notifier.send_message("🎮 游戏自动化任务开始执行")
         
-        # 需要执行的游戏列表（按需导入游戏类，避免提前加载大模块）
+        # 需要执行的游戏列表（配置化，无需单独游戏类）
         games_to_run = []
+        all_games_config = config.get("games", {})
         
-        # 原神（统一多应用模式，自动识别是否使用BetterGI）
-        if config.get("genshin.enabled"):
-            from games.genshin import GenshinImpact
-            genshin_config = config.get_game_config("genshin")
-            mode_str = "（BetterGI模式）"
-            logger.info(f"原神已启用{mode_str}")
-            games_to_run.append(("原神", genshin_config, GenshinImpact))
-        
-        # 绝区零（统一多应用模式，自动识别是否使用辅助工具）
-        if config.get("zzz.enabled"):
-            from games.zzz import ZenlessZoneZero
-            zzz_config = config.get_game_config("zzz")
-            mode_str = "（多应用辅助模式）"
-            logger.info(f"绝区零已启用{mode_str}")
-            games_to_run.append(("绝区零", zzz_config, ZenlessZoneZero))
+        # 遍历所有游戏配置
+        for game_key, game_config in all_games_config.items():
+            if not game_config.get("enabled", False):
+                continue
+            game_name = game_config.get("name", game_key)
+            logger.info(f"{game_name}已启用")
+            games_to_run.append((game_name, game_config))
         
         if not games_to_run:
             logger.warning("没有启用任何游戏自动化任务")
@@ -80,18 +73,45 @@ def main():
                 notifier.send_message("⚠️ 没有启用任何游戏自动化任务")
             return
         
+        # 延迟导入通用多应用执行器和YAML加载
+        from src.core.game_base import MultiAppBase
+        import yaml
+        import os
+        
         # 执行每个游戏的自动化
         success_count = 0
         total_count = len(games_to_run)
         all_game_results = []
         
-        for game_name, game_config, GameClass in games_to_run:
+        for game_name, game_config in games_to_run:
             logger.info(f"=== 开始处理{game_name}任务")
             
             try:
-                # 传递游戏配置 + 全局配置
-                game = GameClass(game_config, global_config=config.get("global"))
-                result = game.run()
+                # 加载对应游戏的steps配置文件
+                steps_file = game_config.get("steps", "")
+                steps_path = os.path.join("games", steps_file)
+                if not os.path.exists(steps_path):
+                    raise ValueError(f"步骤配置文件不存在: {steps_path}")
+                
+                with open(steps_path, "r", encoding="utf-8") as f:
+                    task_steps = yaml.safe_load(f)
+                
+                if not task_steps or not isinstance(task_steps, list):
+                    raise ValueError(f"步骤配置文件格式错误: {steps_path}")
+                
+                # 直接使用通用多应用执行器，不需要单独的游戏类
+                game_executor = MultiAppBase(game_config, global_config=config.get("global"))
+                game_executor.task_steps = task_steps
+                result = game_executor.run()
+                
+                # 任务完成后自动关闭游戏（如果配置了auto_close）
+                if game_config.get("auto_close", True):
+                    logger.info(f"自动关闭{game_name}所有应用")
+                    for app_key in game_config.get("apps", {}).keys():
+                        try:
+                            game_executor.close_app(app_key, force=True)
+                        except Exception as e:
+                            logger.warning(f"关闭应用[{app_key}]失败: {str(e)}")
                 
                 if result["success"]:
                     success_count += 1

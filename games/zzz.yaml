@@ -1,0 +1,39 @@
+# 绝区零自动化步骤配置示例
+- name: "启动zzz-onedragen辅助"
+  type: "launch_app"
+  app_name: "zzz_onedragen"
+  timeout: 30
+
+- name: "启动绝区零本体"
+  type: "launch_app"
+  app_name: "zzz_game"
+  timeout: 60
+
+- name: "等待登录界面"
+  type: "wait"
+  text: "进入游戏"
+  timeout: 30
+
+- name: "点击进入游戏"
+  type: "click"
+  text: "进入游戏"
+  timeout: 10
+
+- name: "等待进入游戏主界面"
+  type: "wait"
+  text: "通讯"
+  timeout: 30
+
+- name: "切换到辅助工具"
+  type: "switch_app"
+  app_name: "zzz_onedragen"
+
+- name: "点击开始日常任务"
+  type: "click"
+  text: "开始日常"
+  timeout: 10
+
+- name: "等待日常任务完成"
+  type: "wait"
+  text: "日常完成"
+  timeout: 1200
