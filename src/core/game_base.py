@@ -139,65 +139,7 @@ class MultiAppBase:
 
         return hwnds
     
-    def launch_app(self, app_name: str, timeout: int = 30) -> bool:
-        """
-        启动指定应用（对外公开API）
-        :param app_name: 应用名称，对应配置里的key
-        :param timeout: 等待窗口超时时间（秒）
-        :return: 是否启动成功
-        """
-        return self._step_launch_app({
-            'app_name': app_name,
-            'timeout': timeout
-        })
-    
-    def switch_app(self, app_name: str) -> bool:
-        """
-        切换到指定应用，激活窗口（对外公开API）
-        :param app_name: 应用名称
-        :return: 是否切换成功
-        """
-        return self._step_switch_app({
-            'app_name': app_name
-        })
-    
 
-    
-    def close_app(self, app_name: str, force: bool = False) -> bool:
-        """
-        关闭指定应用（对外公开API）
-        :param app_name: 应用名称
-        :param force: 是否强制关闭
-        :return: 是否关闭成功
-        """
-        return self._step_close_app({
-            'app_name': app_name,
-            'force': force
-        })
-    
-    def wait_for_ocr_text(self, target_text: str, timeout: int = 10, 
-                     threshold: float = 0.8, interval: float = 0.5) -> Optional[Dict]:
-        """等待当前应用中出现指定OCR文本（对外公开API）"""
-        # 调用_step_wait，注意保存返回的OCR结果
-        step = {
-            'text': target_text,
-            'timeout': timeout,
-            'threshold': threshold,
-            'interval': interval
-        }
-        success = self._step_wait(step)
-        return step.get('_result', None) if success else None
-    
-    def click_text(self, target_text: str, timeout: int = 10, 
-                  threshold: float = 0.8, double: bool = False, interval: float = 0.5) -> bool:
-        """点击当前应用中的指定文本（对外公开API）"""
-        return self._step_click({
-            'text': target_text,
-            'timeout': timeout,
-            'threshold': threshold,
-            'double': double,
-            'interval': interval
-        })
     
     # ==================== 步骤执行私有方法 ====================
     def _step_launch_app(self, step: Dict) -> bool:
@@ -371,7 +313,15 @@ class MultiAppBase:
             logger.error("没有活跃应用，请先切换到对应应用")
             return False
         
-        res = self.wait_for_ocr_text(target_text, timeout, threshold, interval)
+        # 内部调用_wait步骤获取结果
+        wait_step = {
+            'text': target_text,
+            'timeout': timeout,
+            'threshold': threshold,
+            'interval': interval
+        }
+        success = self._step_wait(wait_step)
+        res = wait_step.get('_result', None) if success else None
         if not res:
             logger.error(f"点击失败，未找到文本: {target_text}")
             return False
