@@ -332,291 +332,319 @@ class MultiAppBase:
         logger.info(f"点击文本成功: [{target_text}] 位置: ({screen_x}, {screen_y})")
         return True
     
+    # ==================== 步骤执行私有方法 ====================
+    def _step_launch_app(self, step: Dict) -> bool:
+        """处理launch_app步骤"""
+        return self.launch_app(step['app_name'], timeout=step.get('timeout', 30))
+    
+    def _step_switch_app(self, step: Dict) -> bool:
+        """处理switch_app步骤"""
+        return self.switch_app(step['app_name'])
+    
+    def _step_close_app(self, step: Dict) -> bool:
+        """处理close_app步骤"""
+        return self.close_app(step['app_name'], force=step.get('force', False))
+    
+    def _step_click(self, step: Dict) -> bool:
+        """处理click步骤"""
+        return self.click_text(
+            step['text'], 
+            timeout=step.get('timeout', 10),
+            double=step.get('double', False),
+            interval=step.get('interval', 0.5)
+        )
+    
+    def _step_wait(self, step: Dict) -> bool:
+        """处理wait步骤"""
+        return self.wait_for_ocr_text(
+            step['text'],
+            timeout=step.get('timeout', 10),
+            interval=step.get('interval', 0.5)
+        ) is not None
+    
+    def _step_sleep(self, step: Dict) -> bool:
+        """处理sleep步骤"""
+        time.sleep(step.get('seconds', 1))
+        return True
+    
+    def _step_press(self, step: Dict) -> bool:
+        """处理press步骤"""
+        self.input_controller.press_key(step['key'])
+        return True
+    
+    def _step_hotkey(self, step: Dict) -> bool:
+        """处理hotkey步骤"""
+        self.input_controller.hotkey(*step['keys'])
+        return True
+    
+    def _step_run_command(self, step: Dict) -> bool:
+        """
+        处理run_command步骤
+        参数说明：
+        - command: 要执行的命令字符串（必填）
+        - cwd: 工作目录（可选，默认None）
+        - shell: 是否使用shell执行（可选，默认True）
+        - timeout: 命令超时时间（秒，可选，默认30）
+        - capture_output: 是否捕获命令输出（可选，默认False）
+        - background: 是否后台运行（可选，默认False，后台运行不等待结果直接返回成功）
+        - raise_on_error: 命令执行失败（返回码非0）时是否抛出异常（可选，默认False）
+        """
+        command = step.get('command')
+        if not command:
+            logger.error("执行命令步骤缺少必填参数: command")
+            return False
+        
+        cwd = step.get('cwd')
+        shell = step.get('shell', True)
+        timeout = step.get('timeout', 30)
+        capture_output = step.get('capture_output', False)
+        background = step.get('background', False)
+        raise_on_error = step.get('raise_on_error', False)
+        
+        logger.info(f"执行系统命令: {command}" + (f" 工作目录: {cwd}" if cwd else "") + (f" 后台运行: {background}" if background else ""))
+        
+        try:
+            if background:
+                # 后台运行模式，独立进程不阻塞
+                subprocess.Popen(
+                    command,
+                    shell=shell,
+                    cwd=cwd,
+                    creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0,
+                    close_fds=True
+                )
+                logger.info("命令已后台执行，不等待结果")
+                return True
+            
+            # 前台执行模式，等待结果
+            result = subprocess.run(
+                command,
+                shell=shell,
+                cwd=cwd,
+                timeout=timeout,
+                capture_output=capture_output,
+                text=capture_output  # 捕获输出时自动解码为字符串
+            )
+            
+            # 处理执行结果
+            if result.returncode != 0:
+                error_msg = f"命令执行失败，返回码: {result.returncode}"
+                if capture_output:
+                    error_msg += f"\n标准错误: {result.stderr}"
+                logger.error(error_msg)
+                if raise_on_error:
+                    raise RuntimeError(error_msg)
+                return False
+            
+            logger.info("命令执行成功")
+            if capture_output:
+                # 保存输出到步骤结果供后续使用
+                step['_result'] = {
+                    'stdout': result.stdout,
+                    'stderr': result.stderr,
+                    'returncode': result.returncode
+                }
+                logger.debug(f"命令输出: {result.stdout}")
+            return True
+            
+        except subprocess.TimeoutExpired as e:
+            logger.error(f"命令执行超时({timeout}秒): {str(e)}")
+            return False
+        except Exception as e:
+            logger.error(f"命令执行出错: {str(e)}")
+            return False
+    
+    def _step_custom(self, step: Dict) -> bool:
+        """处理custom步骤"""
+        func = getattr(self, step['func'])
+        return func()
+    
+    def _step_find_control(self, step: Dict) -> bool:
+        """处理find_control步骤"""
+        properties = step.get('properties', {})
+        if not properties:
+            # 兼容旧格式
+            properties = {
+                'source': step.get('source', 'win32'),
+                'class_name': step.get('class_name'),
+                'window_text': step.get('window_text'),
+                'name': step.get('name'),
+                'control_type': step.get('control_type'),
+                'automation_id': step.get('automation_id'),
+                'control_id': step.get('control_id')
+            }
+        
+        control_info = self.find_control(
+            app_name=step.get('app_name'),
+            properties=properties
+        )
+        if control_info:
+            # 保存找到的控件信息到step_result，供后续步骤使用
+            step['_result'] = control_info
+            return True
+        return False
+    
+    def _step_click_control_by_properties(self, step: Dict) -> bool:
+        """处理click_control_by_properties步骤"""
+        properties = step.get('properties', {})
+        if not properties:
+            logger.error("未指定控件属性")
+            return False
+        
+        return self.click_control_by_properties(
+            app_name=step.get('app_name'),
+            properties=properties,
+            double=step.get('double', False)
+        )
+    
+    def _step_send_text_to_control_by_properties(self, step: Dict) -> bool:
+        """处理send_text_to_control_by_properties步骤"""
+        properties = step.get('properties', {})
+        if not properties:
+            logger.error("未指定控件属性")
+            return False
+        
+        return self.send_text_to_control_by_properties(
+            app_name=step.get('app_name'),
+            properties=properties,
+            text=step.get('text', '')
+        )
+    
+    def _step_find_control_by_hierarchy(self, step: Dict) -> bool:
+        """处理find_control_by_hierarchy步骤"""
+        hierarchy = step.get('hierarchy', [])
+        if not hierarchy:
+            logger.error("未指定层级查找条件")
+            return False
+        
+        control_info = self.find_control_by_hierarchy(
+            app_name=step.get('app_name'),
+            hierarchy=hierarchy
+        )
+        if control_info:
+            # 保存找到的控件信息到step_result
+            step['_result'] = control_info
+            return True
+        return False
+    
+    def _step_click_control_by_hierarchy(self, step: Dict) -> bool:
+        """处理click_control_by_hierarchy步骤"""
+        hierarchy = step.get('hierarchy', [])
+        if not hierarchy:
+            logger.error("未指定层级查找条件")
+            return False
+        
+        control_info = self.find_control_by_hierarchy(
+            app_name=step.get('app_name'),
+            hierarchy=hierarchy
+        )
+        if not control_info:
+            return False
+        
+        return self.control_operator.click(
+            control_info, 
+            double=step.get('double', False)
+        )
+    
+    def _step_send_text_to_control_by_hierarchy(self, step: Dict) -> bool:
+        """处理send_text_to_control_by_hierarchy步骤"""
+        hierarchy = step.get('hierarchy', [])
+        text = step.get('text', '')
+        if not hierarchy:
+            logger.error("未指定层级查找条件")
+            return False
+        
+        control_info = self.find_control_by_hierarchy(
+            app_name=step.get('app_name'),
+            hierarchy=hierarchy
+        )
+        if not control_info:
+            return False
+        
+        return self.control_operator.send_text(
+            control_info, 
+            text
+        )
+    
+    def _step_send_telegram_message(self, step: Dict) -> bool:
+        """处理send_telegram_message步骤"""
+        bot_name = step.get('bot_name', 'default')
+        text = step.get('text', '')
+        parse_mode = step.get('parse_mode', 'HTML')
+        disable_notification = step.get('disable_notification', False)
+        
+        if not text:
+            logger.error("未指定消息文本")
+            return False
+        
+        return self.send_telegram_message(
+            bot_name=bot_name,
+            text=text,
+            parse_mode=parse_mode,
+            disable_notification=disable_notification
+        )
+    
+    def _step_wait_for_telegram_text(self, step: Dict) -> bool:
+        """处理wait_for_telegram_text步骤"""
+        expected_text = step.get('text', '')
+        timeout = step.get('timeout', 60)
+        case_sensitive = step.get('case_sensitive', False)
+        sender_id = step.get('sender_id')
+        
+        if not expected_text:
+            logger.error("未指定期望的文本")
+            return False
+        
+        message = self.wait_for_telegram_text(
+            expected_text=expected_text,
+            timeout=timeout,
+            case_sensitive=case_sensitive,
+            sender_id=sender_id
+        )
+        
+        if message:
+            step['_result'] = message
+            return True
+        return False
+    
     def execute_step(self, step: Dict) -> bool:
         """
         执行单个操作步骤，支持多应用相关步骤
-        新增步骤类型:
-        - launch_app: 启动应用 {"type": "launch_app", "app_name": "应用名", "timeout": 30}
-        - switch_app: 切换应用 {"type": "switch_app", "app_name": "应用名"}
-        - close_app: 关闭应用 {"type": "close_app", "app_name": "应用名", "force": false}
-        - click/wait/sleep/press/hotkey/custom
+        步骤类型分发器，具体逻辑由对应私有方法实现
         """
         step_type = step.get('type')
         step_name = step.get('name', f'未命名步骤({step_type})')
         logger.info(f"执行步骤: {step_name}")
         
+        # 步骤类型到处理方法的映射
+        step_handlers = {
+            'launch_app': self._step_launch_app,
+            'switch_app': self._step_switch_app,
+            'close_app': self._step_close_app,
+            'click': self._step_click,
+            'wait': self._step_wait,
+            'sleep': self._step_sleep,
+            'press': self._step_press,
+            'hotkey': self._step_hotkey,
+            'run_command': self._step_run_command,
+            'custom': self._step_custom,
+            'find_control': self._step_find_control,
+            'click_control_by_properties': self._step_click_control_by_properties,
+            'send_text_to_control_by_properties': self._step_send_text_to_control_by_properties,
+            'find_control_by_hierarchy': self._step_find_control_by_hierarchy,
+            'click_control_by_hierarchy': self._step_click_control_by_hierarchy,
+            'send_text_to_control_by_hierarchy': self._step_send_text_to_control_by_hierarchy,
+            'send_telegram_message': self._step_send_telegram_message,
+            'wait_for_telegram_text': self._step_wait_for_telegram_text,
+        }
+        
         try:
-            # 多应用专属步骤
-            if step_type == 'launch_app':
-                return self.launch_app(step['app_name'], timeout=step.get('timeout', 30))
-            
-            elif step_type == 'switch_app':
-                return self.switch_app(step['app_name'])
-            
-            elif step_type == 'close_app':
-                return self.close_app(step['app_name'], force=step.get('force', False))
-            
-            elif step_type == 'click':
-                return self.click_text(
-                    step['text'], 
-                    timeout=step.get('timeout', 10),
-                    double=step.get('double', False),
-                    interval=step.get('interval', 0.5)
-                )
-            
-            elif step_type == 'wait':
-                return self.wait_for_ocr_text(
-                    step['text'],
-                    timeout=step.get('timeout', 10),
-                    interval=step.get('interval', 0.5)
-                ) is not None
-            
-            elif step_type == 'sleep':
-                time.sleep(step.get('seconds', 1))
-                return True
-            
-            elif step_type == 'press':
-                self.input_controller.press_key(step['key'])
-                return True
-            
-            elif step_type == 'hotkey':
-                self.input_controller.hotkey(*step['keys'])
-                return True
-            
-            elif step_type == 'run_command':
-                """
-                执行系统命令步骤
-                参数说明：
-                - command: 要执行的命令字符串（必填）
-                - cwd: 工作目录（可选，默认None）
-                - shell: 是否使用shell执行（可选，默认True）
-                - timeout: 命令超时时间（秒，可选，默认30）
-                - capture_output: 是否捕获命令输出（可选，默认False）
-                - background: 是否后台运行（可选，默认False，后台运行不等待结果直接返回成功）
-                - raise_on_error: 命令执行失败（返回码非0）时是否抛出异常（可选，默认False）
-                """
-                command = step.get('command')
-                if not command:
-                    logger.error("执行命令步骤缺少必填参数: command")
-                    return False
-                
-                cwd = step.get('cwd')
-                shell = step.get('shell', True)
-                timeout = step.get('timeout', 30)
-                capture_output = step.get('capture_output', False)
-                background = step.get('background', False)
-                raise_on_error = step.get('raise_on_error', False)
-                
-                logger.info(f"执行系统命令: {command}" + (f" 工作目录: {cwd}" if cwd else "") + (f" 后台运行: {background}" if background else ""))
-                
-                try:
-                    if background:
-                        # 后台运行模式，独立进程不阻塞
-                        subprocess.Popen(
-                            command,
-                            shell=shell,
-                            cwd=cwd,
-                            creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0,
-                            close_fds=True
-                        )
-                        logger.info("命令已后台执行，不等待结果")
-                        return True
-                    
-                    # 前台执行模式，等待结果
-                    result = subprocess.run(
-                        command,
-                        shell=shell,
-                        cwd=cwd,
-                        timeout=timeout,
-                        capture_output=capture_output,
-                        text=capture_output  # 捕获输出时自动解码为字符串
-                    )
-                    
-                    # 处理执行结果
-                    if result.returncode != 0:
-                        error_msg = f"命令执行失败，返回码: {result.returncode}"
-                        if capture_output:
-                            error_msg += f"\n标准错误: {result.stderr}"
-                        logger.error(error_msg)
-                        if raise_on_error:
-                            raise RuntimeError(error_msg)
-                        return False
-                    
-                    logger.info("命令执行成功")
-                    if capture_output:
-                        # 保存输出到步骤结果供后续使用
-                        step['_result'] = {
-                            'stdout': result.stdout,
-                            'stderr': result.stderr,
-                            'returncode': result.returncode
-                        }
-                        logger.debug(f"命令输出: {result.stdout}")
-                    return True
-                    
-                except subprocess.TimeoutExpired as e:
-                    logger.error(f"命令执行超时({timeout}秒): {str(e)}")
-                    return False
-                except Exception as e:
-                    logger.error(f"命令执行出错: {str(e)}")
-                    return False
-            
-            elif step_type == 'custom':
-                func = getattr(self, step['func'])
-                return func()
-            
-            # 新增控件操作步骤（使用新的控件操作器）
-            elif step_type == 'find_control':
-                # 查找控件，支持Win32和UIA控件
-                properties = step.get('properties', {})
-                if not properties:
-                    # 兼容旧格式
-                    properties = {
-                        'source': step.get('source', 'win32'),
-                        'class_name': step.get('class_name'),
-                        'window_text': step.get('window_text'),
-                        'name': step.get('name'),
-                        'control_type': step.get('control_type'),
-                        'automation_id': step.get('automation_id'),
-                        'control_id': step.get('control_id')
-                    }
-                
-                control_info = self.find_control(
-                    app_name=step.get('app_name'),
-                    properties=properties
-                )
-                if control_info:
-                    # 保存找到的控件信息到step_result，供后续步骤使用
-                    step['_result'] = control_info
-                    return True
-                return False
-            
-            elif step_type == 'click_control_by_properties':
-                # 根据属性点击控件
-                properties = step.get('properties', {})
-                if not properties:
-                    logger.error("未指定控件属性")
-                    return False
-                
-                return self.click_control_by_properties(
-                    app_name=step.get('app_name'),
-                    properties=properties,
-                    double=step.get('double', False)
-                )
-            
-            elif step_type == 'send_text_to_control_by_properties':
-                # 根据属性给控件发送文本
-                properties = step.get('properties', {})
-                if not properties:
-                    logger.error("未指定控件属性")
-                    return False
-                
-                return self.send_text_to_control_by_properties(
-                    app_name=step.get('app_name'),
-                    properties=properties,
-                    text=step.get('text', '')
-                )
-            
-            elif step_type == 'find_control_by_hierarchy':
-                # 层级查找控件
-                hierarchy = step.get('hierarchy', [])
-                if not hierarchy:
-                    logger.error("未指定层级查找条件")
-                    return False
-                
-                control_info = self.find_control_by_hierarchy(
-                    app_name=step.get('app_name'),
-                    hierarchy=hierarchy
-                )
-                if control_info:
-                    # 保存找到的控件信息到step_result
-                    step['_result'] = control_info
-                    return True
-                return False
-            
-            elif step_type == 'click_control_by_hierarchy':
-                # 层级查找控件并点击，一步完成
-                hierarchy = step.get('hierarchy', [])
-                if not hierarchy:
-                    logger.error("未指定层级查找条件")
-                    return False
-                
-                control_info = self.find_control_by_hierarchy(
-                    app_name=step.get('app_name'),
-                    hierarchy=hierarchy
-                )
-                if not control_info:
-                    return False
-                
-                return self.control_operator.click(
-                    control_info, 
-                    double=step.get('double', False)
-                )
-            
-            elif step_type == 'send_text_to_control_by_hierarchy':
-                # 层级查找控件并发送文本，一步完成
-                hierarchy = step.get('hierarchy', [])
-                text = step.get('text', '')
-                if not hierarchy:
-                    logger.error("未指定层级查找条件")
-                    return False
-                
-                control_info = self.find_control_by_hierarchy(
-                    app_name=step.get('app_name'),
-                    hierarchy=hierarchy
-                )
-                if not control_info:
-                    return False
-                
-                return self.control_operator.send_text(
-                    control_info, 
-                    text
-                )
-            
-            # ==================== Telegram 消息步骤 ====================
-            elif step_type == 'send_telegram_message':
-                # 发送Telegram消息
-                bot_name = step.get('bot_name', 'default')
-                text = step.get('text', '')
-                parse_mode = step.get('parse_mode', 'HTML')
-                disable_notification = step.get('disable_notification', False)
-                
-                if not text:
-                    logger.error("未指定消息文本")
-                    return False
-                
-                return self.send_telegram_message(
-                    bot_name=bot_name,
-                    text=text,
-                    parse_mode=parse_mode,
-                    disable_notification=disable_notification
-                )
-            
-            elif step_type == 'wait_for_telegram_text':
-                # 等待特定文本的Telegram消息
-                expected_text = step.get('text', '')
-                timeout = step.get('timeout', 60)
-                case_sensitive = step.get('case_sensitive', False)
-                sender_id = step.get('sender_id')
-                
-                if not expected_text:
-                    logger.error("未指定期望的文本")
-                    return False
-                
-                message = self.wait_for_telegram_text(
-                    expected_text=expected_text,
-                    timeout=timeout,
-                    case_sensitive=case_sensitive,
-                    sender_id=sender_id
-                )
-                
-                if message:
-                    step['_result'] = message
-                    return True
-                return False
-            
-            else:
+            handler = step_handlers.get(step_type)
+            if not handler:
                 logger.error(f"未知步骤类型: {step_type}")
                 return False
+            
+            return handler(step)
         except Exception as e:
             logger.error(f"步骤执行失败: {step_name} 错误: {str(e)}")
             return False
