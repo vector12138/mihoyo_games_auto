@@ -84,6 +84,28 @@ class MultiAppBase:
         # 操作步骤，子类需要覆盖
         self.task_steps: List[Dict] = []
         
+        # 步骤类型到处理方法的映射，子类可直接扩展无需修改execute_step
+        self.step_handlers = {
+            'launch_app': self._step_launch_app,
+            'switch_app': self._step_switch_app,
+            'close_app': self._step_close_app,
+            'click': self._step_click,
+            'wait': self._step_wait,
+            'sleep': self._step_sleep,
+            'press': self._step_press,
+            'hotkey': self._step_hotkey,
+            'run_command': self._step_run_command,
+            'custom': self._step_custom,
+            'find_control': self._step_find_control,
+            'click_control_by_properties': self._step_click_control_by_properties,
+            'send_text_to_control_by_properties': self._step_send_text_to_control_by_properties,
+            'find_control_by_hierarchy': self._step_find_control_by_hierarchy,
+            'click_control_by_hierarchy': self._step_click_control_by_hierarchy,
+            'send_text_to_control_by_hierarchy': self._step_send_text_to_control_by_hierarchy,
+            'send_telegram_message': self._step_send_telegram_message,
+            'wait_for_telegram_text': self._step_wait_for_telegram_text,
+        }
+        
         logger.info(f"初始化多应用自动化，包含应用: {list(self.apps_config.keys())}")
 
     # 第二步：组合操作切换窗口（Alt键 + 恢复窗口 + 强制前台）
@@ -619,30 +641,8 @@ class MultiAppBase:
         step_name = step.get('name', f'未命名步骤({step_type})')
         logger.info(f"执行步骤: {step_name}")
         
-        # 步骤类型到处理方法的映射
-        step_handlers = {
-            'launch_app': self._step_launch_app,
-            'switch_app': self._step_switch_app,
-            'close_app': self._step_close_app,
-            'click': self._step_click,
-            'wait': self._step_wait,
-            'sleep': self._step_sleep,
-            'press': self._step_press,
-            'hotkey': self._step_hotkey,
-            'run_command': self._step_run_command,
-            'custom': self._step_custom,
-            'find_control': self._step_find_control,
-            'click_control_by_properties': self._step_click_control_by_properties,
-            'send_text_to_control_by_properties': self._step_send_text_to_control_by_properties,
-            'find_control_by_hierarchy': self._step_find_control_by_hierarchy,
-            'click_control_by_hierarchy': self._step_click_control_by_hierarchy,
-            'send_text_to_control_by_hierarchy': self._step_send_text_to_control_by_hierarchy,
-            'send_telegram_message': self._step_send_telegram_message,
-            'wait_for_telegram_text': self._step_wait_for_telegram_text,
-        }
-        
         try:
-            handler = step_handlers.get(step_type)
+            handler = self.step_handlers.get(step_type)
             if not handler:
                 logger.error(f"未知步骤类型: {step_type}")
                 return False
