@@ -10,8 +10,7 @@ import win32gui
 import win32con
 import win32api
 import win32com.client
-import time
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple
 from loguru import logger
 import uiautomation as auto
 

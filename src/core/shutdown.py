@@ -5,7 +5,6 @@
 注意：本项目仅支持Windows系统
 """
 
-import os
 import sys
 import time
 import yaml

@@ -1,7 +1,7 @@
 from pynput.mouse import Controller as MouseController, Button
 from pynput.keyboard import Controller as KeyboardController, Key
 import time
-from typing import Tuple, Optional, Union
+from typing import Optional, Union
 from loguru import logger
 
 

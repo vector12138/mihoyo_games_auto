@@ -13,14 +13,12 @@ os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
 os.environ['PYTHONUNBUFFERED'] = '1'
 
 # 权限检测放在最前面，避免提前加载大模块浪费内存
-from src.utils.util import run_as_admin
+from src.util import run_as_admin
 if not run_as_admin():
     print("需要管理员权限才能运行！")
     sys.exit(1)
 
 # 延迟导入其他模块，启动时只加载必要的
-import time
-import ctypes
 from loguru import logger
 from src.config.logging_config import setup_logging
 
@@ -44,14 +42,14 @@ def main():
         sys.exit(1)
     
     # 所有任务执行前先全局静音（延迟导入音量模块）
-    from src.utils import mute_system_volume, unmute_system_volume
+    from src import mute_system_volume, unmute_system_volume
     mute_system_volume()
     
     try:
         # 初始化通知器（按需导入）
         notifier = None
         if config.get("telegram.enabled"):
-            from src.utils import get_telegram_bridge_client
+            from src import get_telegram_bridge_client
             notifier = get_telegram_bridge_client(config.get("telegram"))
             notifier.send_message("🎮 游戏自动化任务开始执行")
         

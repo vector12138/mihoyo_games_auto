@@ -3,7 +3,7 @@ import win32gui
 import win32con
 import subprocess
 import os
-from typing import List, Dict, Callable, Optional, Any
+from typing import List, Dict, Optional, Any
 from loguru import logger
 from .screen_capture import ScreenCapture
 from .input_controller import InputController
@@ -22,7 +22,7 @@ CREATE_NO_WINDOW = 0x08000000
 
 # 尝试导入Telegram Bridge客户端
 try:
-    from ..utils.telegram_bridge_api_client import get_telegram_bridge_client
+    from ..telegram_bridge_api_client import get_telegram_bridge_client
     TELEGRAM_BRIDGE_AVAILABLE = True
 except ImportError:
     TELEGRAM_BRIDGE_AVAILABLE = False
