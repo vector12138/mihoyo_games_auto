@@ -1,39 +1,31 @@
-# 绝区零自动化步骤配置示例
-- name: "启动zzz-onedragen辅助"
-  type: "launch_app"
-  app_name: "zzz_onedragen"
-  timeout: 30
-
-- name: "启动绝区零本体"
+# 绝区零自动化步骤配置
+- name: "启动绝区零"
   type: "launch_app"
   app_name: "zzz_game"
   timeout: 60
 
-- name: "等待登录界面"
-  type: "wait"
-  text: "进入游戏"
-  timeout: 30
-
-- name: "点击进入游戏"
-  type: "click"
-  text: "进入游戏"
-  timeout: 10
-
-- name: "等待进入游戏主界面"
-  type: "wait"
-  text: "通讯"
-  timeout: 30
-
-- name: "切换到辅助工具"
-  type: "switch_app"
+- name: "启动zzz-onedragen辅助工具"
+  type: "launch_app"
   app_name: "zzz_onedragen"
+  timeout: 60
 
-- name: "点击开始日常任务"
-  type: "click"
-  text: "开始日常"
+- name: "等待辅助窗口激活"
+  type: "sleep"
+  seconds: 10
+
+- name: "点击一条龙按钮"
+  type: "click_control_by_properties"
+  properties: 
+    source: "uia"
+    automation_id: "QApplication.PhosWindow.areaWidget.StackedWidget.PopUpAniStackedWidget.home_interface.SingleDirectionScrollArea.qt_scrollarea_viewport.Banner.QWidget.QWidget.start_button"
   timeout: 10
 
-- name: "等待日常任务完成"
-  type: "wait"
-  text: "日常完成"
-  timeout: 1200
+- name: "等待一条龙任务执行完成（10分钟）"
+  type: "sleep"
+  seconds: 600 # 可根据实际情况调整时间
+
+- name: "检测一条龙是否运行完成"
+  type: "wait_for_telegram_text"
+  text: "ZZZ一条龙运行通知\n一条龙运行完成"
+  sender_id: 8445448103
+  timeout: 1800 # 可根据实际情况调整时间
