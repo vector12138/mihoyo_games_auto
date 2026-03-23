@@ -15,11 +15,13 @@
   type: launch_app
   app_name: bettergi_pop
   timeout: 30
+  ignore_error: true
 
 # 第二步：处理新版本弹窗
 - name: 处理新版本弹窗
   type: close_app
   app_name: bettergi_pop
+  ignore_error: true
 
 # 第三步：启动一条龙任务
 - name: 切换回BetterGI窗口
