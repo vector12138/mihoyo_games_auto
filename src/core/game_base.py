@@ -254,22 +254,74 @@ class MultiAppBase:
         if not notify_window:
             logger.info(f"启动应用[{window_title}]: {app_path}")
             try:
-                # 使用独立进程模式启动，主程序退出不会关闭应用
-                if app_path.lower().endswith('.exe'):
-                    # EXE应用直接启动，独立进程
-                    subprocess.Popen(
-                        app_path,
-                        creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
-                        close_fds=True
-                    )
+                # 计划任务场景兼容启动标志：CREATE_BREAKAWAY_FROM_JOB 脱离任务计划程序的Job限制
+                # 避免计划任务终止时连带关闭启动的应用，同时解决Session下启动权限问题
+                creation_flags = CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS
+                if os.name == 'nt':
+                    # Windows特有的标志，允许脱离Job对象
+                    creation_flags |= 0x00000010  # CREATE_BREAKAWAY_FROM_JOB
+                
+                # 优先使用ShellExecute启动（兼容快捷方式、URL、各种文件类型，权限更友好）
+                import ctypes
+                shell32 = ctypes.windll.shell32
+                # ShellExecuteEx参数
+                SEE_MASK_NOCLOSEPROCESS = 0x00000040
+                SW_SHOWNORMAL = 1
+                
+                class SHELLEXECUTEINFO(ctypes.Structure):
+                    _fields_ = [
+                        ("cbSize", ctypes.c_ulong),
+                        ("fMask", ctypes.c_ulong),
+                        ("hwnd", ctypes.c_void_p),
+                        ("lpVerb", ctypes.c_wchar_p),
+                        ("lpFile", ctypes.c_wchar_p),
+                        ("lpParameters", ctypes.c_wchar_p),
+                        ("lpDirectory", ctypes.c_wchar_p),
+                        ("nShow", ctypes.c_int),
+                        ("hInstApp", ctypes.c_void_p),
+                        ("lpIDList", ctypes.c_void_p),
+                        ("lpClass", ctypes.c_wchar_p),
+                        ("hkeyClass", ctypes.c_void_p),
+                        ("dwHotKey", ctypes.c_ulong),
+                        ("hIcon", ctypes.c_void_p),
+                        ("hProcess", ctypes.c_void_p),
+                    ]
+                
+                sei = SHELLEXECUTEINFO()
+                sei.cbSize = ctypes.sizeof(sei)
+                sei.fMask = SEE_MASK_NOCLOSEPROCESS
+                sei.hwnd = None
+                sei.lpVerb = "open"  # 用open动作，和用户双击效果一致
+                sei.lpFile = app_path
+                sei.lpParameters = ""
+                sei.lpDirectory = os.path.dirname(app_path) if os.path.dirname(app_path) else None
+                sei.nShow = SW_SHOWNORMAL
+                
+                # 执行启动
+                success = shell32.ShellExecuteExW(ctypes.byref(sei))
+                if not success or sei.hInstApp <= 32:
+                    # ShellExecute启动失败，回退到subprocess方式
+                    logger.warning(f"ShellExecute启动失败，回退到subprocess方式，错误码: {sei.hInstApp}")
+                    if app_path.lower().endswith('.exe'):
+                        # EXE应用直接启动，独立进程
+                        subprocess.Popen(
+                            app_path,
+                            creationflags=creation_flags,
+                            close_fds=True
+                        )
+                    else:
+                        # 非EXE应用（比如快捷方式、脚本）
+                        subprocess.Popen(
+                            app_path,
+                            shell=True,
+                            creationflags=creation_flags,
+                            close_fds=True
+                        )
                 else:
-                    # 非EXE应用（比如快捷方式、脚本）
-                    subprocess.Popen(
-                        app_path,
-                        shell=True,
-                        creationflags=CREATE_NEW_PROCESS_GROUP,
-                        close_fds=True
-                    )
+                    logger.info(f"ShellExecute启动成功，进程ID: {ctypes.windll.kernel32.GetProcessId(sei.hProcess)}")
+                    # 关闭进程句柄，不影响子进程运行
+                    ctypes.windll.kernel32.CloseHandle(sei.hProcess)
+                
                 logger.info(f"应用[{window_title}]已独立启动，不受主程序退出影响")
             except Exception as e:
                 logger.error(f"启动应用[{window_title}]失败: {str(e)}")
