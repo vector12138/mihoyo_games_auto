@@ -42,3 +42,6 @@ Thumbs.db
 
 # 自动生成的报告
 execution_reports/
+
+# 运行历史记录
+.run_history/
