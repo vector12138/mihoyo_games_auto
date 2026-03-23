@@ -75,13 +75,36 @@ def main():
         from src.core.game_base import MultiAppBase
         import yaml
         import os
+        import datetime
         
         # 执行每个游戏的自动化
         success_count = 0
         total_count = len(games_to_run)
         all_game_results = []
         
+        # 运行历史存储目录（隐藏目录）
+        RUN_HISTORY_DIR = ".run_history"
+        # 今日日期（Asia/Shanghai时区）
+        today = datetime.date.today().strftime("%Y-%m-%d")
+        
         for game_name, game_config in games_to_run:
+            # 检查今日是否已经运行过该游戏
+            history_file = os.path.join(RUN_HISTORY_DIR, f"{game_name}.lastrun")
+            already_run = False
+            
+            if os.path.exists(history_file):
+                try:
+                    with open(history_file, "r", encoding="utf-8") as f:
+                        last_run_date = f.read().strip()
+                        if last_run_date == today:
+                            already_run = True
+                except Exception as e:
+                    logger.warning(f"读取{game_name}运行历史失败: {str(e)}，将正常执行任务")
+            
+            if already_run:
+                logger.info(f"✅ [{game_name}]今日({today})已经运行过，跳过执行")
+                continue
+            
             logger.info(f"=== 开始处理{game_name}任务")
             
             try:
@@ -117,6 +140,13 @@ def main():
                 if result["success"]:
                     success_count += 1
                     logger.info(f"{game_name}任务执行成功")
+                    # 记录今日成功运行日期，下次跳过
+                    os.makedirs(RUN_HISTORY_DIR, exist_ok=True)
+                    try:
+                        with open(history_file, "w", encoding="utf-8") as f:
+                            f.write(today)
+                    except Exception as e:
+                        logger.warning(f"写入{game_name}运行历史失败: {str(e)}，不影响后续执行")
                     msg = f"✅ {game_name}任务执行成功\n📊 步骤完成: {result['success_count']}/{result['total_steps']}"
                     all_game_results.append(msg)
                     if notifier:
