@@ -199,7 +199,7 @@ class MultiAppBase:
                 'window_title': window_title,
                 'running': True
             }
-            return self.switch_app(app_name)
+            return self._step_switch_app({'app_name': app_name})
         
         # 启动应用
         if not notify_window:
@@ -239,7 +239,7 @@ class MultiAppBase:
                     'running': True
                 }
                 logger.info(f"应用[{window_title}]启动成功")
-                return self.switch_app(app_name)
+                return self._step_switch_app({'app_name': app_name})
             
             time.sleep(1)
         

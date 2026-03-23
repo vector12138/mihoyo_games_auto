@@ -107,7 +107,7 @@ def main():
                     logger.info(f"自动关闭{game_name}所有应用")
                     for app_key in game_config.get("apps", {}).keys():
                         try:
-                            game_executor.close_app(app_key, force=True)
+                            game_executor._step_close_app({'app_name': app_key, 'force': True})
                         except Exception as e:
                             logger.warning(f"关闭应用[{app_key}]失败: {str(e)}")
                 
