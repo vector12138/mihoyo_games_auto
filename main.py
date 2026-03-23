@@ -76,6 +76,8 @@ def main():
         import yaml
         import os
         import datetime
+        import win32evtlog
+        import subprocess
         
         # 执行每个游戏的自动化
         success_count = 0
@@ -86,6 +88,55 @@ def main():
         RUN_HISTORY_DIR = ".run_history"
         # 今日日期（Asia/Shanghai时区）
         today = datetime.date.today().strftime("%Y-%m-%d")
+
+        def is_remote_wake_boot() -> bool:
+            """判断是否为远程唤醒/自动开机场景（WOL冷启动/睡眠远程唤醒）"""
+            now = datetime.datetime.now().astimezone()
+            # 检查过去10分钟内的启动/唤醒事件
+            ten_minutes_ago = now - datetime.timedelta(minutes=10)
+            
+            try:
+                hand = win32evtlog.OpenEventLog('localhost', 'System')
+                flags = win32evtlog.EVENTLOG_BACKWARDS_READ | win32evtlog.EVENTLOG_SEQUENTIAL_READ
+                events = win32evtlog.ReadEventLog(hand, flags, 0)
+                
+                for event in events:
+                    event_time = event.TimeGenerated.astimezone()
+                    if event_time < ten_minutes_ago:
+                        break
+                    
+                    # 场景1：WOL冷启动（系统刚开机，唤醒源为网卡）
+                    if event.SourceName == 'Microsoft-Windows-Kernel-General' and event.EventID == 12:
+                        # 检查最后一次唤醒源是否为网卡
+                        wake_result = subprocess.run(
+                            ['powercfg', '/lastwake'],
+                            capture_output=True,
+                            text=True,
+                            timeout=5
+                        )
+                        wake_output = wake_result.stdout.lower()
+                        # 匹配网卡相关特征
+                        wol_keywords = ['pci\\ven_', 'ethernet', 'network controller', 'wake on lan', 'nic', 'magic packet']
+                        if any(keyword in wake_output for keyword in wol_keywords):
+                            return True
+                    
+                    # 场景2：远程唤醒（从睡眠/休眠被网络唤醒）
+                    if event.SourceName == 'Power-Troubleshooter' and event.EventID == 1:
+                        wake_result = subprocess.run(
+                            ['powercfg', '/lastwake'],
+                            capture_output=True,
+                            text=True,
+                            timeout=5
+                        )
+                        wake_output = wake_result.stdout.lower()
+                        wol_keywords = ['pci\\ven_', 'ethernet', 'network controller', 'wake on lan', 'nic', 'magic packet']
+                        if any(keyword in wake_output for keyword in wol_keywords):
+                            return True
+                
+                return False
+            except Exception as e:
+                logger.warning(f"检测远程唤醒场景失败: {str(e)}，将不执行自动关机")
+                return False
         
         for game_name, game_config in games_to_run:
             # 检查今日是否已经运行过该游戏
