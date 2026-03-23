@@ -99,17 +99,20 @@ def main():
                 
                 # 直接使用通用多应用执行器，不需要单独的游戏类
                 game_executor = MultiAppBase(game_config, global_config=config.get("global"))
+                
+                # 如果配置了自动关闭，自动添加关闭所有应用的步骤到最后
+                if game_config.get("auto_close", True):
+                    logger.info(f"已开启自动关闭，将在任务最后添加关闭{game_name}所有应用的步骤")
+                    for app_key in game_config.get("apps", {}).keys():
+                        task_steps.append({
+                            "type": "close_app",
+                            "name": f"自动关闭应用[{app_key}]",
+                            "app_name": app_key,
+                            "force": True
+                        })
+                
                 game_executor.task_steps = task_steps
                 result = game_executor.run()
-                
-                # 任务完成后自动关闭游戏（如果配置了auto_close）
-                if game_config.get("auto_close", True):
-                    logger.info(f"自动关闭{game_name}所有应用")
-                    for app_key in game_config.get("apps", {}).keys():
-                        try:
-                            game_executor._step_close_app({'app_name': app_key, 'force': True})
-                        except Exception as e:
-                            logger.warning(f"关闭应用[{app_key}]失败: {str(e)}")
                 
                 if result["success"]:
                     success_count += 1
