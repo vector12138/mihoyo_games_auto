@@ -117,31 +117,80 @@ class MultiAppBase:
             win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
         time.sleep(0.1)  # 等待窗口恢复
         
-        # 2. 获取前台权限（核心：模拟Alt键 + 权限设置）
+        # 2. 核心权限获取（兼容计划任务/后台运行场景）
         user32 = ctypes.WinDLL('user32', use_last_error=True)
-        # 获取当前进程ID
-        pid = win32process.GetCurrentProcessId()
-        # 允许当前进程设置前台窗口（参数为0表示允许所有进程，也可填当前pid）
-        user32.AllowSetForegroundWindow(pid)
-        # 另一个关键API：解除前台窗口锁定
-        user32.SystemParametersInfoW(win32con.SPI_SETFOREGROUNDLOCKTIMEOUT, 0, 0, 0)
-        # 发送Alt键按下+松开（让系统认为当前进程有用户交互）
-        win32api.keybd_event(win32con.VK_MENU, 0, 0, 0)
-        win32api.keybd_event(win32con.VK_MENU, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(0.1)
+        target_thread_id = None
+        current_thread_id = None
         
-        # 3. 尝试多种方式切换前台
-        # 方式1：SetForegroundWindow
-        res1 = win32gui.SetForegroundWindow(hwnd)
-        # 方式2：BringWindowToTop（备用）
-        win32gui.BringWindowToTop(hwnd)
-        # 方式3：SetActiveWindow（补充）
-        win32gui.SetActiveWindow(hwnd)
+        try:
+            # 解除前台窗口锁定（计划任务场景关键，避免系统拦截）
+            user32.SystemParametersInfoW(win32con.SPI_SETFOREGROUNDLOCKTIMEOUT, 0, ctypes.c_int(0), 0)
+            
+            # AttachThreadInput方案：将当前线程附加到目标窗口线程，获取焦点权限
+            # 解决Session 0/计划任务下无焦点权限的问题
+            target_thread_id = win32process.GetWindowThreadProcessId(hwnd)[0]
+            current_thread_id = win32api.GetCurrentThreadId()
+            
+            if target_thread_id != current_thread_id:
+                # 附加线程，共享输入队列
+                user32.AttachThreadInput(current_thread_id, target_thread_id, True)
+                # 允许目标进程和当前进程设置前台窗口
+                user32.AllowSetForegroundWindow(win32process.GetWindowThreadProcessId(hwnd)[1])
+                user32.AllowSetForegroundWindow(win32process.GetCurrentProcessId())
+            
+            # 模拟用户交互：发送Alt键，让系统认为有用户操作
+            win32api.keybd_event(win32con.VK_MENU, 0, 0, 0)
+            win32api.keybd_event(win32con.VK_MENU, 0, win32con.KEYEVENTF_KEYUP, 0)
+            time.sleep(0.1)
+            
+            # 3. 多方法尝试设置前台，兼容各种权限场景
+            success = False
+            # 方法1: 标准SetForegroundWindow
+            try:
+                win32gui.SetForegroundWindow(hwnd)
+                success = True
+            except:
+                pass
+            
+            # 方法2: BringWindowToTop兜底
+            if not success:
+                try:
+                    win32gui.BringWindowToTop(hwnd)
+                    success = True
+                except:
+                    pass
+            
+            # 方法3: SetWindowPos强制置顶再取消置顶
+            if not success:
+                try:
+                    win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0, win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
+                    win32gui.SetWindowPos(hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0, win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
+                    success = True
+                except:
+                    pass
+            
+            # 方法4: SetActiveWindow补充
+            try:
+                win32gui.SetActiveWindow(hwnd)
+            except:
+                pass
+            
+            time.sleep(0.1)
+            
+            # 计划任务场景下放宽验证：即使没完全拿到前台也继续执行（很多操作无需前台焦点）
+            current_foreground_hwnd = win32gui.GetForegroundWindow()
+            if current_foreground_hwnd != hwnd:
+                logger.warning(f"未完全获取前台焦点，将继续执行：当前句柄{current_foreground_hwnd}，目标句柄{hwnd}")
+            
+            return True, "窗口激活完成"
         
-        # 验证：检查是否真的切换成功
-        current_foreground_hwnd = win32gui.GetForegroundWindow()
-        if current_foreground_hwnd != hwnd:
-            raise ValueError(f"切换失败，当前前台窗口句柄：{current_foreground_hwnd}（目标：{hwnd}）")
+        finally:
+            # 必须清理：解除线程附加，避免影响系统其他窗口
+            try:
+                if target_thread_id and current_thread_id and target_thread_id != current_thread_id:
+                    user32.AttachThreadInput(current_thread_id, target_thread_id, False)
+            except:
+                pass
         
     def _find_windows_by_title(self, keyword: str) -> List[int]:
         """
