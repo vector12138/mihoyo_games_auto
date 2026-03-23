@@ -148,6 +148,10 @@ def main():
                     except Exception as e:
                         logger.warning(f"写入{game_name}运行历史失败: {str(e)}，不影响后续执行")
                     msg = f"✅ {game_name}任务执行成功\n📊 步骤完成: {result['success_count']}/{result['total_steps']}"
+                    # 显示警告信息
+                    warning_steps = result.get("warning_steps", [])
+                    if warning_steps:
+                        msg += f"\n⚠️  警告（{len(warning_steps)}个）:\n" + '\n'.join(f"  • {w}" for w in warning_steps)
                     all_game_results.append(msg)
                     if notifier:
                         notifier.send_message(msg)
@@ -155,6 +159,10 @@ def main():
                     logger.error(f"{game_name}任务执行失败")
                     failed_steps_str = '\n'.join(result["failed_steps"])
                     msg = f"❌ {game_name}任务执行失败\n📊 步骤完成: {result['success_count']}/{result['total_steps']}\n❌ 失败步骤:\n{failed_steps_str}"
+                    # 失败也显示警告信息
+                    warning_steps = result.get("warning_steps", [])
+                    if warning_steps:
+                        msg += f"\n⚠️  警告（{len(warning_steps)}个）:\n" + '\n'.join(f"  • {w}" for w in warning_steps)
                     all_game_results.append(msg)
                     if notifier:
                         notifier.send_message(msg)

@@ -641,15 +641,38 @@ class MultiAppBase:
         step_name = step.get('name', f'未命名步骤({step_type})')
         logger.info(f"执行步骤: {step_name}")
         
+        ignore_error = step.get('ignore_error', False)
         try:
             handler = self.step_handlers.get(step_type)
             if not handler:
-                logger.error(f"未知步骤类型: {step_type}")
+                error_msg = f"未知步骤类型: {step_type}"
+                if ignore_error:
+                    warning_msg = f"步骤[{step_name}]执行异常（已忽略）: {error_msg}"
+                    logger.warning(warning_msg)
+                    step['_warning'] = warning_msg
+                    return True
+                logger.error(error_msg)
                 return False
             
-            return handler(step)
+            result = handler(step)
+            if not result:
+                error_msg = f"步骤执行失败: {step_name}"
+                if ignore_error:
+                    warning_msg = f"步骤[{step_name}]执行异常（已忽略）: {error_msg}"
+                    logger.warning(warning_msg)
+                    step['_warning'] = warning_msg
+                    return True
+                logger.error(error_msg)
+                return False
+            return result
         except Exception as e:
-            logger.error(f"步骤执行失败: {step_name} 错误: {str(e)}")
+            error_msg = f"步骤执行失败: {step_name} 错误: {str(e)}"
+            if ignore_error:
+                warning_msg = f"步骤[{step_name}]执行异常（已忽略）: {str(e)}"
+                logger.warning(warning_msg)
+                step['_warning'] = warning_msg
+                return True
+            logger.error(error_msg)
             return False
     
     def run(self) -> Dict:
@@ -666,6 +689,7 @@ class MultiAppBase:
         success_count = 0
         total_steps = len(self.task_steps)
         failed_steps = []
+        warning_steps = []  # 忽略错误的警告步骤列表
         
         for i, step in enumerate(self.task_steps, 1):
             step_name = step.get('name', f'步骤{i}')
@@ -677,14 +701,24 @@ class MultiAppBase:
                 failed_steps.append(f"❌ {step_name}")
                 continue
             
+            # 检查是否有忽略的错误警告
+            if '_warning' in step:
+                warning_steps.append(step['_warning'])
+            
             success_count += 1
         
-        logger.info(f"任务执行完成，成功{success_count}/{total_steps}步")
+        # 输出结果汇总
+        if warning_steps:
+            logger.info(f"任务执行完成，成功{success_count}/{total_steps}步，{len(warning_steps)}个警告:\n" + '\n'.join(warning_steps))
+        else:
+            logger.info(f"任务执行完成，成功{success_count}/{total_steps}步")
+        
         return {
             "success": len(failed_steps) == 0,
             "success_count": success_count,
             "total_steps": total_steps,
-            "failed_steps": failed_steps
+            "failed_steps": failed_steps,
+            "warning_steps": warning_steps  # 新增警告步骤字段
         }
     
     def find_control(self, app_name: Optional[str] = None, properties: Dict = None) -> Optional[ControlInfo]:
