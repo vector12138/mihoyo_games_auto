@@ -396,6 +396,11 @@ class MultiAppBase:
         hwnd = app_state['hwnd']
         
         try:
+            # 关闭前先切换到目标应用，确保窗口处于可操作状态
+            logger.info(f"关闭前先切换到应用[{window_title}]")
+            self._step_switch_app({'app_name': app_name})
+            time.sleep(0.5)
+            
             if force:
                 # 强制关闭：优先杀进程，再尝试发关闭消息兜底
                 try:
