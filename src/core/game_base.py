@@ -397,13 +397,35 @@ class MultiAppBase:
         
         try:
             if force:
-                # 强制关闭
-                win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+                # 强制关闭：优先杀进程，再尝试发关闭消息兜底
+                try:
+                    _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                    if pid:
+                        logger.info(f"强制杀进程: {window_title} PID: {pid}")
+                        subprocess.run(f'taskkill /F /T /PID {pid}', shell=True, capture_output=True, timeout=10)
+                except Exception as e:
+                    logger.warning(f"杀进程失败，回退到WM_CLOSE: {str(e)}")
+                    win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
             else:
-                # 尝试正常关闭
-                win32gui.SendMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+                # 尝试正常关闭，失败则自动杀进程
+                try:
+                    win32gui.SendMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+                    # 等待3秒看是否关闭
+                    closed = False
+                    for _ in range(6):
+                        if not win32gui.IsWindow(hwnd):
+                            closed = True
+                            break
+                        time.sleep(0.5)
+                    if not closed:
+                        logger.warning(f"应用{window_title}正常关闭失败，强制杀进程")
+                        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                        if pid:
+                            subprocess.run(f'taskkill /F /T /PID {pid}', shell=True, capture_output=True, timeout=10)
+                except Exception as e:
+                    logger.error(f"正常关闭失败: {str(e)}")
             
-            # 等待关闭
+            # 最终等待关闭确认
             for _ in range(10):
                 if not win32gui.IsWindow(hwnd):
                     break
