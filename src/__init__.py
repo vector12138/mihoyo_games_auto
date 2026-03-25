@@ -10,14 +10,16 @@ __description__ = "米哈游游戏自动化工具"
 
 # 类型检查阶段(IDE跳转、mypy检查)直接导入所有符号，支持跳转和类型提示
 if TYPE_CHECKING:
-    from .util import get_prj_root
+    from .util import (
+        get_prj_root,
+        mute_system_volume,
+        unmute_system_volume,
+        is_remote_wake_boot,
+        shutdown,
+    )
     from .telegram_bridge_api_client import (
         TelegramBridgeApiClient,
         get_telegram_bridge_client
-    )
-    from .volume import (
-        mute_system_volume,
-        unmute_system_volume
     )
 
 __all__ = [
@@ -25,7 +27,9 @@ __all__ = [
     'TelegramBridgeApiClient',
     'get_telegram_bridge_client',
     'mute_system_volume',
-    'unmute_system_volume'
+    'unmute_system_volume',
+    'is_remote_wake_boot',
+    'shutdown'
 ]
 
 # 运行时延迟导入，不影响启动性能
@@ -40,9 +44,16 @@ def __getattr__(name):
         from .telegram_bridge_api_client import get_telegram_bridge_client
         return get_telegram_bridge_client
     elif name == 'mute_system_volume':
-        from .volume import mute_system_volume
+        from .util import mute_system_volume
         return mute_system_volume
     elif name == 'unmute_system_volume':
-        from .volume import unmute_system_volume
+        from .util import unmute_system_volume
         return unmute_system_volume
-    raise AttributeError(f"module {__name__} has no attribute {name}")
+    elif name == 'is_remote_wake_boot':
+        from .util import is_remote_wake_boot
+        return is_remote_wake_boot
+    elif name == 'shutdown':
+        from .util import shutdown
+        return shutdown
+    else:
+        raise AttributeError(f"module {__name__} has no attribute {name}")

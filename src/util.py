@@ -1,7 +1,63 @@
 import os
 import ctypes
 import sys
+import platform
+import datetime
+import win32evtlog
+import subprocess
+from loguru import logger
 from typing import Optional
+from pycaw.pycaw import AudioUtilities
+
+# 全局变量
+_original_volume = 0
+
+def mute_system_volume() -> bool:
+    """静音系统音量"""
+    global _original_volume
+    
+    try:
+        # 获取扬声器的音量控制接口
+        devices = AudioUtilities.GetSpeakers()
+        volume = devices.EndpointVolume
+        
+        # 保存当前音量（范围 0.0-1.0）
+        current_vol = volume.GetMasterVolumeLevelScalar()
+        _original_volume = int(current_vol * 100)
+        
+        # 静音
+        volume.SetMute(True, None)
+        
+        logger.info(f"系统已静音，原始音量: {_original_volume}%")
+        return True
+        
+    except Exception as e:
+        logger.error(f"静音失败: {e}")
+        return False
+
+def unmute_system_volume() -> bool:
+    """恢复音量"""
+    global _original_volume
+    
+    if _original_volume == 0:
+        return False
+    
+    try:
+        devices = AudioUtilities.GetSpeakers()
+        volume = devices.EndpointVolume
+        
+        # 取消静音
+        volume.SetMute(False, None)
+        
+        # 恢复原始音量
+        volume.SetMasterVolumeLevelScalar(_original_volume / 100.0, None)
+        
+        logger.info(f"系统已恢复音量: {_original_volume}%")
+        return True
+        
+    except Exception as e:
+        logger.error(f"恢复音量失败: {e}")
+        return False
 
 def get_prj_root()->str:
     """获取项目根目录（适配任意脚本位置）"""
@@ -55,4 +111,94 @@ def run_as_admin(args: Optional[list] = None) -> bool:
         sys.exit(0)
     except Exception as e:
         print(f"请求管理员权限失败: {str(e)}")
+        return False
+    
+
+def is_remote_wake_boot() -> bool:
+    """判断是否为远程唤醒/自动开机场景（WOL冷启动/睡眠远程唤醒）"""
+    now = datetime.datetime.now().astimezone()
+    # 检查过去10分钟内的启动/唤醒事件
+    ten_minutes_ago = now - datetime.timedelta(minutes=10)
+
+    try:
+        hand = win32evtlog.OpenEventLog('localhost', 'System')
+        flags = win32evtlog.EVENTLOG_BACKWARDS_READ | win32evtlog.EVENTLOG_SEQUENTIAL_READ
+        events = win32evtlog.ReadEventLog(hand, flags, 0)
+        
+        for event in events:
+            event_time = event.TimeGenerated.astimezone()
+            if event_time < ten_minutes_ago:
+                break
+            
+            # 场景1：WOL冷启动（系统刚开机，唤醒源为网卡）
+            if event.SourceName == 'Microsoft-Windows-Kernel-General' and event.EventID == 12:
+                # 检查最后一次唤醒源是否为网卡
+                wake_result = subprocess.run(
+                    ['powercfg', '/lastwake'],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                wake_output = wake_result.stdout.lower()
+                # 匹配网卡相关特征
+                wol_keywords = ['pci\\ven_', 'ethernet', 'network controller', 'wake on lan', 'nic', 'magic packet']
+                if any(keyword in wake_output for keyword in wol_keywords):
+                    return True
+            
+            # 场景2：远程唤醒（从睡眠/休眠被网络唤醒）
+            if event.SourceName == 'Power-Troubleshooter' and event.EventID == 1:
+                wake_result = subprocess.run(
+                    ['powercfg', '/lastwake'],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                wake_output = wake_result.stdout.lower()
+                wol_keywords = ['pci\\ven_', 'ethernet', 'network controller', 'wake on lan', 'nic', 'magic packet']
+                if any(keyword in wake_output for keyword in wol_keywords):
+                    return True
+        
+        return False
+    except Exception as e:
+        logger.warning(f"检测远程唤醒场景失败: {str(e)}，将不执行自动关机")
+        return False
+
+def shutdown(delay: int = 60, force: bool = False):
+    """
+    优雅关机（Windows专用）
+    :param delay: 关机延迟时间（秒），默认60秒
+    :param force: 是否强制关机
+    :return: 是否成功
+    """
+    
+    logger.info("准备关机...")
+    
+    # 检查操作系统
+    system = platform.system().lower()
+    if system != 'windows':
+        logger.error(f"不支持的操作系统: {system}，本项目仅支持Windows")
+        return False
+    
+    # 2. 执行关机命令
+    logger.info("执行关机...")
+    
+    try:
+        # Windows关机命令
+        # /s: 关机
+        # /f: 强制关闭应用程序
+        # /t 0: 立即执行
+        force_flag = '/f' if force else ''
+        command = f'shutdown /s {force_flag} /t {delay}'
+        
+        logger.info(f"执行命令: {command}")
+        subprocess.run(command, shell=True, check=True)
+        
+        logger.info("关机命令已执行")
+        return True
+        
+    except subprocess.CalledProcessError as e:
+        logger.error(f"关机命令执行失败: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"关机异常: {e}")
         return False
