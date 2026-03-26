@@ -25,6 +25,8 @@ from src.config.logging_config import setup_logging
 # 配置日志
 setup_logging()
 
+# 自动关机模块
+from src.util import is_remote_wake_boot, shutdown
 
 def main():
     logger.info("=== 米哈游游戏自动化工具启动 ===")
@@ -40,6 +42,11 @@ def main():
     except Exception as e:
         logger.error(f"加载配置失败: {str(e)}")
         sys.exit(1)
+
+    # 检查是否WOL
+    is_wol = is_remote_wake_boot()
+    logger.info(f"是否WOL唤醒: {is_wol}")
+
     
     # 所有任务执行前先全局静音（延迟导入音量模块）
     from src.util import mute_system_volume, unmute_system_volume
@@ -185,9 +192,8 @@ def main():
             total_msg = f"🎮 所有任务执行完成 成功: {success_count}/{total_count}\n\n{all_results_str}"
             notifier.send_message(total_msg)
         
-        # 自动关机（按需导入）
-        from src.util import is_remote_wake_boot, shutdown
-        if config.get("global.auto_shutdown") or is_remote_wake_boot():
+        # 自动关机
+        if config.get("global.auto_shutdown") or is_wol:
             logger.info("任务完成，即将自动关机")
             if notifier:
                 notifier.send_message("🔌 任务完成，即将自动关机")
@@ -195,6 +201,8 @@ def main():
     finally:
         # 无论任务是否成功、是否出错，都全局恢复音量
         unmute_system_volume()
+
+        logger.info("所有任务执行完成")
 
 
 if __name__ == "__main__":

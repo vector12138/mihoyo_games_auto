@@ -1,0 +1,37 @@
+# 崩坏三自动化步骤配置
+- name: "启动崩坏三"
+  type: "launch_app"
+  app_name: "bh3_game"
+  timeout: 60
+
+- name: "启动识宝小助手辅助工具"
+  type: "launch_app"
+  app_name: "bh3_maa"
+  timeout: 60
+
+- name: "等待辅助窗口激活"
+  type: "sleep"
+  seconds: 30
+
+- name: "切换到识宝小助手窗口"
+  type: "switch_app"
+  app_name: "bh3_maa"
+
+- name: "点击开始任务"
+  type: "click_control_by_properties"
+  properties: 
+    source: "uia"
+    name: "开始任务"
+    class_name: TextBlock
+    control_type: TextControl
+  timeout: 10
+
+- name: "等待任务执行完成（5分钟）"
+  type: "sleep"
+  seconds: 300 # 可根据实际情况调整时间
+
+- name: "检测任务是否运行完成"
+  type: "wait_for_telegram_text"
+  text: "崩坏三任务已全部完成"
+  sender_id: 8445448103
+  timeout: 1800 # 可根据实际情况调整时间
