@@ -117,21 +117,30 @@ def run_as_admin(args: Optional[list] = None) -> bool:
 def is_remote_wake_boot() -> bool:
     """判断是否为远程唤醒/自动开机场景（WOL冷启动/睡眠远程唤醒）"""
     now = datetime.datetime.now().astimezone()
-    # 检查过去10分钟内的启动/唤醒事件
-    ten_minutes_ago = now - datetime.timedelta(minutes=10)
+    # 检查过去30分钟内的启动/唤醒事件，时间窗口更宽松避免漏判
+    thirty_minutes_ago = now - datetime.timedelta(minutes=30)
+    logger.debug(f"检查WOL唤醒事件，时间范围：{thirty_minutes_ago} 到 {now}")
 
     try:
         hand = win32evtlog.OpenEventLog('localhost', 'System')
         flags = win32evtlog.EVENTLOG_BACKWARDS_READ | win32evtlog.EVENTLOG_SEQUENTIAL_READ
-        events = win32evtlog.ReadEventLog(hand, flags, 0)
+        events = []
+        
+        # 循环读取所有事件，避免只读取第一批漏掉
+        while True:
+            batch = win32evtlog.ReadEventLog(hand, flags, 0)
+            if not batch:
+                break
+            events.extend(batch)
         
         for event in events:
             event_time = event.TimeGenerated.astimezone()
-            if event_time < ten_minutes_ago:
+            if event_time < thirty_minutes_ago:
                 break
             
             # 场景1：WOL冷启动（系统刚开机，唤醒源为网卡）
             if event.SourceName == 'Microsoft-Windows-Kernel-General' and event.EventID == 12:
+                logger.debug(f"检测到系统启动事件（ID:12），时间：{event_time}")
                 # 检查最后一次唤醒源是否为网卡
                 wake_result = subprocess.run(
                     ['powercfg', '/lastwake'],
@@ -140,13 +149,17 @@ def is_remote_wake_boot() -> bool:
                     timeout=5
                 )
                 wake_output = wake_result.stdout.lower()
-                # 匹配网卡相关特征
-                wol_keywords = ['pci\\ven_', 'ethernet', 'network controller', 'wake on lan', 'nic', 'magic packet']
+                logger.debug(f"powercfg /lastwake输出：{wake_output}")
+                # 匹配网卡相关特征，增加更多关键词兼容不同网卡
+                wol_keywords = ['pci\\ven_', 'ethernet', 'network controller', 'wake on lan', 'nic', 'magic packet',
+                               'wake source', 'lan', 'network', '以太网', '网卡', '魔术包', 'wol']
                 if any(keyword in wake_output for keyword in wol_keywords):
+                    logger.info("检测到WOL冷启动")
                     return True
             
             # 场景2：远程唤醒（从睡眠/休眠被网络唤醒）
             if event.SourceName == 'Power-Troubleshooter' and event.EventID == 1:
+                logger.debug(f"检测到系统唤醒事件（ID:1），时间：{event_time}")
                 wake_result = subprocess.run(
                     ['powercfg', '/lastwake'],
                     capture_output=True,
@@ -154,10 +167,14 @@ def is_remote_wake_boot() -> bool:
                     timeout=5
                 )
                 wake_output = wake_result.stdout.lower()
-                wol_keywords = ['pci\\ven_', 'ethernet', 'network controller', 'wake on lan', 'nic', 'magic packet']
+                logger.debug(f"powercfg /lastwake输出：{wake_output}")
+                wol_keywords = ['pci\\ven_', 'ethernet', 'network controller', 'wake on lan', 'nic', 'magic packet',
+                               'wake source', 'lan', 'network', '以太网', '网卡', '魔术包', 'wol']
                 if any(keyword in wake_output for keyword in wol_keywords):
+                    logger.info("检测到WOL远程唤醒")
                     return True
         
+        logger.info("未检测到WOL唤醒事件")
         return False
     except Exception as e:
         logger.warning(f"检测远程唤醒场景失败: {str(e)}，将不执行自动关机")
