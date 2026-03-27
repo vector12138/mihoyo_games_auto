@@ -122,18 +122,22 @@ def is_remote_wake_boot() -> bool:
     logger.debug(f"检查WOL唤醒事件，时间范围：{thirty_minutes_ago} 到 {now}")
 
     try:
+        # 先读取系统事件日志
         hand = win32evtlog.OpenEventLog('localhost', 'System')
         flags = win32evtlog.EVENTLOG_BACKWARDS_READ | win32evtlog.EVENTLOG_SEQUENTIAL_READ
-        events = []
+        system_events = []
         
         # 循环读取所有事件，避免只读取第一批漏掉
         while True:
             batch = win32evtlog.ReadEventLog(hand, flags, 0)
             if not batch:
                 break
-            events.extend(batch)
+            system_events.extend(batch)
         
-        for event in events:
+        # 检查是否有最近30分钟内的启动事件
+        has_recent_boot = False
+        boot_time = None
+        for event in system_events:
             event_time = event.TimeGenerated.astimezone()
             if event_time < thirty_minutes_ago:
                 break
@@ -141,6 +145,8 @@ def is_remote_wake_boot() -> bool:
             # 场景1：WOL冷启动（系统刚开机，唤醒源为网卡）
             if event.SourceName == 'Microsoft-Windows-Kernel-General' and event.EventID == 12:
                 logger.debug(f"检测到系统启动事件（ID:12），时间：{event_time}")
+                boot_time = event_time
+                has_recent_boot = True
                 # 检查最后一次唤醒源是否为网卡
                 wake_result = subprocess.run(
                     ['powercfg', '/lastwake'],
@@ -154,7 +160,11 @@ def is_remote_wake_boot() -> bool:
                 wol_keywords = ['pci\\ven_', 'ethernet', 'network controller', 'wake on lan', 'nic', 'magic packet',
                                'wake source', 'lan', 'network', '以太网', '网卡', '魔术包', 'wol']
                 if any(keyword in wake_output for keyword in wol_keywords):
-                    logger.info("检测到WOL冷启动")
+                    logger.info("检测到WOL冷启动（通过唤醒源匹配）")
+                    return True
+                # 兜底判断：如果唤醒历史计数为0，并且是最近15分钟内启动的，大概率是WOL冷启动（部分系统冷启动不记录唤醒源）
+                if ('唤醒历史记录计数 - 0' in wake_output or 'wake history count - 0' in wake_output) and (now - event_time).total_seconds() < 900:
+                    logger.info("检测到WOL冷启动（唤醒历史为空兜底判断）")
                     return True
             
             # 场景2：远程唤醒（从睡眠/休眠被网络唤醒）
@@ -173,6 +183,41 @@ def is_remote_wake_boot() -> bool:
                 if any(keyword in wake_output for keyword in wol_keywords):
                     logger.info("检测到WOL远程唤醒")
                     return True
+        
+        # 兜底逻辑：最近30分钟内启动，且没有交互式登录记录，判定为WOL自动开机
+        if has_recent_boot and boot_time:
+            logger.debug("检查最近30分钟内是否有交互式登录事件")
+            try:
+                # 读取安全日志，检查登录事件
+                sec_hand = win32evtlog.OpenEventLog('localhost', 'Security')
+                sec_events = []
+                while True:
+                    batch = win32evtlog.ReadEventLog(sec_hand, flags, 0)
+                    if not batch:
+                        break
+                    sec_events.extend(batch)
+                
+                has_interactive_login = False
+                for event in sec_events:
+                    event_time = event.TimeGenerated.astimezone()
+                    if event_time < boot_time:
+                        break
+                    # 登录事件ID 4624，登录类型2是交互式登录（本地键盘登录）
+                    if event.EventID == 4624:
+                        try:
+                            login_type = event.StringInserts[8]
+                            if login_type == '2':  # 交互式本地登录
+                                logger.debug(f"检测到本地交互式登录事件，时间：{event_time}，登录类型：{login_type}")
+                                has_interactive_login = True
+                                break
+                        except:
+                            pass
+                
+                if not has_interactive_login:
+                    logger.info("检测到WOL冷启动（无本地登录兜底判断）")
+                    return True
+            except Exception as e:
+                logger.debug(f"读取安全日志失败（无权限或未开启），跳过登录检查: {str(e)}")
         
         logger.info("未检测到WOL唤醒事件")
         return False
