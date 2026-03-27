@@ -184,8 +184,30 @@ def is_remote_wake_boot() -> bool:
                     logger.info("检测到WOL远程唤醒")
                     return True
         
-        # 兜底逻辑：最近30分钟内启动，且没有交互式登录记录，判定为WOL自动开机
+        # 兜底逻辑：最近30分钟内启动，且无本地用户活动，判定为WOL自动开机
         if has_recent_boot and boot_time:
+            # 第一层兜底：检查用户最后输入时间，判断是否为本地操作
+            class LASTINPUTINFO(ctypes.Structure):
+                _fields_ = [
+                    ("cbSize", ctypes.c_uint),
+                    ("dwTime", ctypes.c_uint)
+                ]
+            
+            lii = LASTINPUTINFO()
+            lii.cbSize = ctypes.sizeof(LASTINPUTINFO)
+            if ctypes.windll.user32.GetLastInputInfo(ctypes.byref(lii)):
+                # 系统启动以来的毫秒数
+                tick_count = ctypes.windll.kernel32.GetTickCount()
+                # 最后一次输入距离现在的毫秒数
+                idle_time = tick_count - lii.dwTime
+                # 启动后5分钟内有用户输入，说明是本地手动开机（包括自动登录场景）
+                if idle_time < 300 * 1000:
+                    logger.debug(f"检测到最近有用户输入，距离现在{idle_time/1000:.1f}秒，判定为本地开机")
+                else:
+                    logger.info(f"检测到无用户输入，距离最后输入{idle_time/1000:.1f}秒，判定为WOL自动开机")
+                    return True
+            
+            # 第二层兜底：检查安全日志交互式登录事件（兼容无输入检测权限的场景）
             logger.debug("检查最近30分钟内是否有交互式登录事件")
             try:
                 # 读取安全日志，检查登录事件
