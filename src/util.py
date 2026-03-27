@@ -200,11 +200,15 @@ def is_remote_wake_boot() -> bool:
                 tick_count = ctypes.windll.kernel32.GetTickCount()
                 # 最后一次输入距离现在的毫秒数
                 idle_time = tick_count - lii.dwTime
-                # 启动后5分钟内有用户输入，说明是本地手动开机（包括自动登录场景）
-                if idle_time < 300 * 1000:
-                    logger.debug(f"检测到最近有用户输入，距离现在{idle_time/1000:.1f}秒，判定为本地开机")
+                # 最后一次输入距离系统启动的时间（毫秒）
+                time_since_boot_to_input = lii.dwTime
+                # 排除启动后2分钟内的自动脚本模拟输入，只有启动2分钟后的输入才算真人操作
+                if idle_time < 300 * 1000 and time_since_boot_to_input > 120 * 1000:
+                    logger.debug(f"检测到真人用户输入，启动{time_since_boot_to_input/1000:.1f}秒后有输入，距离现在{idle_time/1000:.1f}秒，判定为本地开机")
                 else:
-                    logger.info(f"检测到无用户输入，距离最后输入{idle_time/1000:.1f}秒，判定为WOL自动开机")
+                    if time_since_boot_to_input <= 120 * 1000:
+                        logger.debug(f"检测到启动初期输入，距离启动{time_since_boot_to_input/1000:.1f}秒，判定为脚本模拟输入，忽略")
+                    logger.info(f"无有效真人输入，判定为WOL自动开机")
                     return True
             
             # 第二层兜底：检查安全日志交互式登录事件（兼容无输入检测权限的场景）
