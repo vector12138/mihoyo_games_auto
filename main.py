@@ -44,8 +44,9 @@ def main():
         sys.exit(1)
 
     # 检查是否WOL
-    is_wol = is_remote_wake_boot()
-    logger.info(f"是否WOL唤醒: {is_wol}")
+    wol_mode = config.get("global.wol_mode", "auto")
+    is_wol = is_remote_wake_boot(wol_mode)
+    logger.info(f"是否WOL唤醒: {is_wol} (模式: {wol_mode})")
 
     
     # 所有任务执行前先全局静音（延迟导入音量模块）

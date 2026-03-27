@@ -5,6 +5,7 @@ global:
   retry_delay: 1                 # 重试间隔（秒）
   click_delay: 0.2               # 点击后延迟（秒）
   auto_shutdown: false           # 任务完成后自动关机
+  wol_mode: "auto"               # WOL唤醒检测模式：auto（自动检测）/force_on（强制判定为WOL）/force_off（强制判定为非WOL）
 
 # Telegram 统一配置
 telegram:

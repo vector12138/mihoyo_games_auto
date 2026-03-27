@@ -114,8 +114,18 @@ def run_as_admin(args: Optional[list] = None) -> bool:
         return False
     
 
-def is_remote_wake_boot() -> bool:
-    """判断是否为远程唤醒/自动开机场景（WOL冷启动/睡眠远程唤醒）"""
+def is_remote_wake_boot(wol_mode: str = "auto") -> bool:
+    """判断是否为远程唤醒/自动开机场景（WOL冷启动/睡眠远程唤醒）
+    :param wol_mode: WOL模式，可选值：auto（自动检测）、force_on（强制判定为WOL）、force_off（强制判定为非WOL）
+    """
+    # 优先处理强制模式
+    if wol_mode == "force_on":
+        logger.info("WOL模式强制开启，判定为WOL唤醒")
+        return True
+    if wol_mode == "force_off":
+        logger.info("WOL模式强制关闭，判定为本地开机")
+        return False
+    
     now = datetime.datetime.now().astimezone()
     # 检查过去30分钟内的启动/唤醒事件，时间窗口更宽松避免漏判
     thirty_minutes_ago = now - datetime.timedelta(minutes=30)
@@ -134,9 +144,6 @@ def is_remote_wake_boot() -> bool:
                 break
             system_events.extend(batch)
         
-        # 检查是否有最近30分钟内的启动事件
-        has_recent_boot = False
-        boot_time = None
         for event in system_events:
             event_time = event.TimeGenerated.astimezone()
             if event_time < thirty_minutes_ago:
@@ -145,8 +152,6 @@ def is_remote_wake_boot() -> bool:
             # 场景1：WOL冷启动（系统刚开机，唤醒源为网卡）
             if event.SourceName == 'Microsoft-Windows-Kernel-General' and event.EventID == 12:
                 logger.debug(f"检测到系统启动事件（ID:12），时间：{event_time}")
-                boot_time = event_time
-                has_recent_boot = True
                 # 检查最后一次唤醒源是否为网卡
                 wake_result = subprocess.run(
                     ['powercfg', '/lastwake'],
@@ -183,67 +188,6 @@ def is_remote_wake_boot() -> bool:
                 if any(keyword in wake_output for keyword in wol_keywords):
                     logger.info("检测到WOL远程唤醒")
                     return True
-        
-        # 兜底逻辑：最近30分钟内启动，且无本地用户活动，判定为WOL自动开机
-        if has_recent_boot and boot_time:
-            # 第一层兜底：检查用户最后输入时间，判断是否为本地操作
-            class LASTINPUTINFO(ctypes.Structure):
-                _fields_ = [
-                    ("cbSize", ctypes.c_uint),
-                    ("dwTime", ctypes.c_uint)
-                ]
-            
-            lii = LASTINPUTINFO()
-            lii.cbSize = ctypes.sizeof(LASTINPUTINFO)
-            if ctypes.windll.user32.GetLastInputInfo(ctypes.byref(lii)):
-                # 系统启动以来的毫秒数
-                tick_count = ctypes.windll.kernel32.GetTickCount()
-                # 最后一次输入距离现在的毫秒数
-                idle_time = tick_count - lii.dwTime
-                # 最后一次输入距离系统启动的时间（毫秒）
-                time_since_boot_to_input = lii.dwTime
-                # 排除启动后2分钟内的自动脚本模拟输入，只有启动2分钟后的输入才算真人操作
-                if idle_time < 300 * 1000 and time_since_boot_to_input > 120 * 1000:
-                    logger.debug(f"检测到真人用户输入，启动{time_since_boot_to_input/1000:.1f}秒后有输入，距离现在{idle_time/1000:.1f}秒，判定为本地开机")
-                else:
-                    if time_since_boot_to_input <= 120 * 1000:
-                        logger.debug(f"检测到启动初期输入，距离启动{time_since_boot_to_input/1000:.1f}秒，判定为脚本模拟输入，忽略")
-                    logger.info(f"无有效真人输入，判定为WOL自动开机")
-                    return True
-            
-            # 第二层兜底：检查安全日志交互式登录事件（兼容无输入检测权限的场景）
-            logger.debug("检查最近30分钟内是否有交互式登录事件")
-            try:
-                # 读取安全日志，检查登录事件
-                sec_hand = win32evtlog.OpenEventLog('localhost', 'Security')
-                sec_events = []
-                while True:
-                    batch = win32evtlog.ReadEventLog(sec_hand, flags, 0)
-                    if not batch:
-                        break
-                    sec_events.extend(batch)
-                
-                has_interactive_login = False
-                for event in sec_events:
-                    event_time = event.TimeGenerated.astimezone()
-                    if event_time < boot_time:
-                        break
-                    # 登录事件ID 4624，登录类型2是交互式登录（本地键盘登录）
-                    if event.EventID == 4624:
-                        try:
-                            login_type = event.StringInserts[8]
-                            if login_type == '2':  # 交互式本地登录
-                                logger.debug(f"检测到本地交互式登录事件，时间：{event_time}，登录类型：{login_type}")
-                                has_interactive_login = True
-                                break
-                        except:
-                            pass
-                
-                if not has_interactive_login:
-                    logger.info("检测到WOL冷启动（无本地登录兜底判断）")
-                    return True
-            except Exception as e:
-                logger.debug(f"读取安全日志失败（无权限或未开启），跳过登录检查: {str(e)}")
         
         logger.info("未检测到WOL唤醒事件")
         return False
