@@ -818,15 +818,30 @@ class MultiAppBase:
         total_steps = len(self.task_steps)
         failed_steps = []
         warning_steps = []  # 忽略错误的警告步骤列表
+        has_failed = False  # 标记是否有步骤执行失败
         
         for i, step in enumerate(self.task_steps, 1):
             step_name = step.get('name', f'步骤{i}')
-            logger.info(f"步骤 [{i}/{total_steps}] - {step_name}")
+            is_force = step.get('force', False)
+            
+            # 如果已经有步骤失败，只执行标记为强制的步骤
+            if has_failed:
+                if not is_force:
+                    logger.info(f"步骤 [{i}/{total_steps}] - {step_name}：前面步骤已失败，跳过非强制步骤")
+                    continue
+                logger.info(f"步骤 [{i}/{total_steps}] - {step_name}：强制执行（前面步骤已失败）")
+            
+            else:
+                logger.info(f"步骤 [{i}/{total_steps}] - {step_name}")
+            
             result = self.retry_manager.retry(lambda: self.execute_step(step))
             
             if not result:
                 logger.error(f"第{i}步执行失败: {step_name}")
                 failed_steps.append(f"❌ {step_name}")
+                # 非强制步骤失败，标记整体失败
+                if not is_force:
+                    has_failed = True
                 continue
             
             # 检查是否有忽略的错误警告

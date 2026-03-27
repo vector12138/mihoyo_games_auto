@@ -138,7 +138,7 @@ def main():
                             "type": "close_app",
                             "name": f"自动关闭应用[{app_key}]",
                             "app_name": app_key,
-                            "force": False
+                            "force": True
                         })
                 
                 game_executor.task_steps = task_steps
