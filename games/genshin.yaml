@@ -30,6 +30,7 @@
 
 - name: 点击一条龙按钮
   type: click_control_by_properties
+  fail_act: "stop"
   properties:
     source: uia
     name: 一条龙

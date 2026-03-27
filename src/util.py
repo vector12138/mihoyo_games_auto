@@ -2,11 +2,12 @@ import os
 import ctypes
 import sys
 import platform
-import datetime
+import psutil
 import win32evtlog
 import subprocess
 from loguru import logger
 from typing import Optional
+from datetime import datetime, timedelta
 from pycaw.pycaw import AudioUtilities
 
 # 全局变量
@@ -126,74 +127,23 @@ def is_remote_wake_boot(wol_mode: str = "auto") -> bool:
         logger.info("WOL模式强制关闭，判定为本地开机")
         return False
     
-    now = datetime.datetime.now().astimezone()
-    # 检查过去30分钟内的启动/唤醒事件，时间窗口更宽松避免漏判
-    thirty_minutes_ago = now - datetime.timedelta(minutes=30)
-    logger.debug(f"检查WOL唤醒事件，时间范围：{thirty_minutes_ago} 到 {now}")
+    # 此电脑判断远程开机不可行，直接判断是否12:00左右开机的
+     # 1. 获取系统开机时间（时间戳）
+    boot_timestamp = psutil.boot_time()
+    
+    # 2. 转成 datetime 对象
+    boot_time = datetime.fromtimestamp(boot_timestamp)
 
-    try:
-        # 先读取系统事件日志
-        hand = win32evtlog.OpenEventLog('localhost', 'System')
-        flags = win32evtlog.EVENTLOG_BACKWARDS_READ | win32evtlog.EVENTLOG_SEQUENTIAL_READ
-        system_events = []
-        
-        # 循环读取所有事件，避免只读取第一批漏掉
-        while True:
-            batch = win32evtlog.ReadEventLog(hand, flags, 0)
-            if not batch:
-                break
-            system_events.extend(batch)
-        
-        for event in system_events:
-            event_time = event.TimeGenerated.astimezone()
-            if event_time < thirty_minutes_ago:
-                break
-            
-            # 场景1：WOL冷启动（系统刚开机，唤醒源为网卡）
-            if event.SourceName == 'Microsoft-Windows-Kernel-General' and event.EventID == 12:
-                logger.debug(f"检测到系统启动事件（ID:12），时间：{event_time}")
-                # 检查最后一次唤醒源是否为网卡
-                wake_result = subprocess.run(
-                    ['powercfg', '/lastwake'],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-                wake_output = wake_result.stdout.lower()
-                logger.debug(f"powercfg /lastwake输出：{wake_output}")
-                # 匹配网卡相关特征，增加更多关键词兼容不同网卡
-                wol_keywords = ['pci\\ven_', 'ethernet', 'network controller', 'wake on lan', 'nic', 'magic packet',
-                               'wake source', 'lan', 'network', '以太网', '网卡', '魔术包', 'wol']
-                if any(keyword in wake_output for keyword in wol_keywords):
-                    logger.info("检测到WOL冷启动（通过唤醒源匹配）")
-                    return True
-                # 兜底判断：如果唤醒历史计数为0，并且是最近15分钟内启动的，大概率是WOL冷启动（部分系统冷启动不记录唤醒源）
-                if ('唤醒历史记录计数 - 0' in wake_output or 'wake history count - 0' in wake_output) and (now - event_time).total_seconds() < 900:
-                    logger.info("检测到WOL冷启动（唤醒历史为空兜底判断）")
-                    return True
-            
-            # 场景2：远程唤醒（从睡眠/休眠被网络唤醒）
-            if event.SourceName == 'Power-Troubleshooter' and event.EventID == 1:
-                logger.debug(f"检测到系统唤醒事件（ID:1），时间：{event_time}")
-                wake_result = subprocess.run(
-                    ['powercfg', '/lastwake'],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-                wake_output = wake_result.stdout.lower()
-                logger.debug(f"powercfg /lastwake输出：{wake_output}")
-                wol_keywords = ['pci\\ven_', 'ethernet', 'network controller', 'wake on lan', 'nic', 'magic packet',
-                               'wake source', 'lan', 'network', '以太网', '网卡', '魔术包', 'wol']
-                if any(keyword in wake_output for keyword in wol_keywords):
-                    logger.info("检测到WOL远程唤醒")
-                    return True
-        
-        logger.info("未检测到WOL唤醒事件")
-        return False
-    except Exception as e:
-        logger.warning(f"检测远程唤醒场景失败: {str(e)}，将不执行自动关机")
-        return False
+    logger.info(f"系统开机时间: {boot_time}")
+    
+    # 3. 构造当天 12:00
+    noon_time = datetime(boot_time.year, boot_time.month, boot_time.day, 12, 0, 0)
+    
+    # 4. 计算时间差
+    time_diff = abs(boot_time - noon_time)
+    
+    # 5. 判断是否在允许范围内
+    return time_diff <= timedelta(minutes=5)
 
 def shutdown(delay: int = 60, force: bool = False):
     """

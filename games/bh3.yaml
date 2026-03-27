@@ -19,6 +19,7 @@
 
 - name: "点击开始任务"
   type: "click_control_by_properties"
+  fail_act: "stop"
   properties: 
     source: "uia"
     name: "开始任务"

@@ -19,11 +19,12 @@
 
 - name: "点击一条龙按钮"
   type: "click_control_by_properties"
+  fail_act: "stop"
   properties: 
     source: "uia"
-    name: "启动一条龙🚀"
-    class_name: PrimaryPushButton
-    control_type: ButtonControl
+    name: "启动一条龙"
+    class_name: PillPushButton
+    control_type: CheckBoxControl
   timeout: 10
 
 - name: "等待一条龙任务执行完成（5分钟）"
