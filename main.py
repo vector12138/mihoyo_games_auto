@@ -48,7 +48,50 @@ def main():
     is_wol = is_remote_wake_boot(wol_mode)
     logger.info(f"是否WOL唤醒: {is_wol} (模式: {wol_mode})")
 
+    # 先筛选需要执行的游戏
+    import os
+    import datetime
+    # 运行历史存储目录（隐藏目录）
+    RUN_HISTORY_DIR = ".run_history"
+    # 今日日期（Asia/Shanghai时区）
+    today = datetime.date.today().strftime("%Y-%m-%d")
     
+    # 需要执行的游戏列表（配置化，无需单独游戏类）
+    games_to_run = []
+    all_games_config = config.get("games", {})
+    
+    # 遍历所有游戏配置，先筛选出需要执行的
+    for game_key, game_config in all_games_config.items():
+        if not game_config.get("enabled", False):
+            continue
+        game_name = game_config.get("name", game_key)
+        
+        # 检查今日是否已经运行过该游戏
+        history_file = os.path.join(RUN_HISTORY_DIR, f"{game_name}.lastrun")
+        already_run = False
+        
+        if os.path.exists(history_file):
+            try:
+                with open(history_file, "r", encoding="utf-8") as f:
+                    last_run_date = f.read().strip()
+                    if last_run_date == today:
+                        already_run = True
+            except Exception as e:
+                logger.warning(f"读取{game_name}运行历史失败: {str(e)}，将正常执行任务")
+        
+        if already_run:
+            logger.info(f"✅ [{game_name}]今日({today})已经运行过，跳过执行")
+            continue
+        
+        logger.info(f"{game_name}已启用且今日未运行，加入待执行列表")
+        games_to_run.append((game_name, game_config))
+    
+    # 没有需要执行的任务，直接返回
+    if not games_to_run:
+        logger.warning("没有需要执行的游戏自动化任务")
+        return
+    
+    # 有需要执行的任务，才执行后续初始化操作
     # 所有任务执行前先全局静音（延迟导入音量模块）
     from src.util import mute_system_volume, unmute_system_volume
     mute_system_volume()
@@ -61,57 +104,16 @@ def main():
             notifier = get_telegram_bridge_client(config.get("telegram"))
             notifier.send_message("🎮 游戏自动化任务开始执行")
         
-        # 需要执行的游戏列表（配置化，无需单独游戏类）
-        games_to_run = []
-        all_games_config = config.get("games", {})
-        
-        # 遍历所有游戏配置
-        for game_key, game_config in all_games_config.items():
-            if not game_config.get("enabled", False):
-                continue
-            game_name = game_config.get("name", game_key)
-            logger.info(f"{game_name}已启用")
-            games_to_run.append((game_name, game_config))
-        
-        if not games_to_run:
-            logger.warning("没有启用任何游戏自动化任务")
-            if notifier:
-                notifier.send_message("⚠️ 没有启用任何游戏自动化任务")
-            return
-        
         # 延迟导入通用多应用执行器和YAML加载
         from src.core.game_base import MultiAppBase
         import yaml
-        import os
-        import datetime
         
         # 执行每个游戏的自动化
         success_count = 0
         total_count = len(games_to_run)
         all_game_results = []
-        
-        # 运行历史存储目录（隐藏目录）
-        RUN_HISTORY_DIR = ".run_history"
-        # 今日日期（Asia/Shanghai时区）
-        today = datetime.date.today().strftime("%Y-%m-%d")
 
         for game_name, game_config in games_to_run:
-            # 检查今日是否已经运行过该游戏
-            history_file = os.path.join(RUN_HISTORY_DIR, f"{game_name}.lastrun")
-            already_run = False
-            
-            if os.path.exists(history_file):
-                try:
-                    with open(history_file, "r", encoding="utf-8") as f:
-                        last_run_date = f.read().strip()
-                        if last_run_date == today:
-                            already_run = True
-                except Exception as e:
-                    logger.warning(f"读取{game_name}运行历史失败: {str(e)}，将正常执行任务")
-            
-            if already_run:
-                logger.info(f"✅ [{game_name}]今日({today})已经运行过，跳过执行")
-                continue
             
             logger.info(f"=== 开始处理{game_name}任务")
             
