@@ -49,29 +49,40 @@ python main.py
 ```
 
 ## 🎯 新增游戏教程
-1. 在`games/`目录下新建游戏文件，比如`hsr.py`
-2. 继承`MultiAppBase`类
-3. 配置`self.buttons`按钮文本
-4. 配置`self.task_steps`操作步骤
-5. 实现自定义方法（可选）
-6. 在`config.example.yaml`添加对应游戏配置
-7. 在`main.py`导入并添加到执行列表
+完全无需编写代码，仅需配置YAML文件即可：
+1. 在`games/`目录下新建游戏步骤配置文件，比如`hsr.yaml`，编写游戏操作步骤
+2. 在`config.example.yaml`添加对应游戏配置：
+```yaml
+games:
+  hsr:
+    enabled: true
+    name: "崩坏：星穹铁道"
+    steps: "hsr.yaml"
+    auto_close: true
+    apps:
+      游戏:
+        path: "C:\\Path\\To\\StarRail.exe"
+        window_title: "崩坏：星穹铁道"
+        class_name: "UnityWndClass"
+```
+3. 运行时会自动加载配置并执行，无需修改任何核心代码
 
-### 示例：
-```python
-from src.core import MultiAppBase
+### 步骤配置示例：
+```yaml
+# games/hsr.yaml
+- name: "启动游戏"
+  type: "start_app"
+  app_name: "游戏"
+  fail_act: "stop"
 
-class StarRail(MultiAppBase):
-    def __init__(self, config, global_config=None):
-        super().__init__(config)
-        self.buttons = {
-            'login': '登录',
-            'enter': '进入游戏'
-        }
-        self.task_steps = [
-            {'type': 'click', 'text': self.buttons['login']},
-            {'type': 'click', 'text': self.buttons['enter']}
-        ]
+- name: "等待登录按钮出现"
+  type: "wait_for_text"
+  text: "登录"
+  timeout: 30
+
+- name: "点击登录"
+  type: "click"
+  text: "登录"
 ```
 
 ## ⚠️ 注意事项
@@ -127,9 +138,10 @@ mihoyo_games_auto/
 │   └── 04-开发文档/        # 开发相关文档
 │       ├── 01-优化总结.md
 │       └── 02-Bug修复总结.md
-├── games/                  # 🎮 各个游戏实现目录
-│   ├── genshin.py          # 原神实现
-│   └── zzz.py              # 绝区零实现
+├── games/                  # 🎮 各个游戏步骤配置目录（纯YAML，无代码）
+│   ├── genshin.yaml        # 原神步骤配置
+│   ├── zzz.yaml            # 绝区零步骤配置
+│   └── bh3.yaml            # 崩坏3步骤配置
 ├── src/                    # 🧱 核心源码目录
 │   ├── core/               # 核心组件
 │   │   ├── game_base.py    # 游戏基类 + 多应用基类
@@ -141,8 +153,7 @@ mihoyo_games_auto/
 │   ├── config/             # 配置管理
 │   │   ├── config.py       # 配置加载
 │   │   └── logging_config.py # 日志配置
-│   └── utils/              # 工具模块
-│       └── telegram_notifier.py # Telegram通知模块
+│   └── util.py             # 工具模块（音量控制、WOL检测、关机等）
 ├── main.py                 # 🚀 主入口
 ├── requirements.txt        # 📦 依赖列表
 ├── config.example.yaml     # 📄 示例配置文件
