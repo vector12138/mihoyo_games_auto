@@ -113,8 +113,12 @@ def main():
         total_count = len(games_to_run)
         all_game_results = []
 
+        # 提前创建运行历史目录，避免每次循环判断
+        os.makedirs(RUN_HISTORY_DIR, exist_ok=True)
+        
         for game_name, game_config in games_to_run:
-            
+            # 计算当前游戏的运行历史文件路径
+            history_file = os.path.join(RUN_HISTORY_DIR, f"{game_name}.lastrun")
             logger.info(f"=== 开始处理{game_name}任务")
             
             try:
