@@ -5,11 +5,15 @@
 ## ✨ 特性
 - 🚀 **高速截图**：基于Windows BitBlt API实现，比传统截图快10倍以上
 - 🔍 **精准识别**：百度PaddleOCR中文识别准确率99%+，支持模糊匹配
-- 🎮 **框架化设计**：新增游戏只需要继承基类，配置按钮和步骤，无需修改核心代码
+- 🎮 **配置化设计**：新增游戏完全不需要写代码，只需编写YAML步骤配置文件即可
 - ⌨️ **纯Python控制**：去除AutoHotkey依赖，全Python实现鼠标键盘控制
-- 📱 **通知支持**：Telegram消息推送任务状态（仅支持Telegram，不支持其他平台）
-- 🔄 **重试机制**：失败自动重试，提高成功率
+- 📱 **通知支持**：Telegram消息推送任务状态和执行结果，支持远程控制
+- 🔄 **重试机制**：失败自动重试，支持单步骤自定义重试次数和超时时间
 - ⚡ **GPU加速**：支持GPU加速OCR识别，速度更快
+- 🌐 **远程WOL唤醒支持**：支持远程唤醒Windows设备执行任务，完成后自动关机
+- 🛡️ **灵活的流程控制**：支持步骤失败后自定义动作（继续/终止流程），支持强制步骤
+- 🧠 **智能任务调度**：自动跳过今日已执行的任务，无任务时不做任何额外操作（不静音、不发通知）
+- 🔧 **多种WOL检测模式**：支持自动检测、强制WOL、强制本地三种模式，适配各种场景
 
 ## 📦 安装依赖
 ```bash
@@ -45,29 +49,40 @@ python main.py
 ```
 
 ## 🎯 新增游戏教程
-1. 在`games/`目录下新建游戏文件，比如`hsr.py`
-2. 继承`MultiAppBase`类
-3. 配置`self.buttons`按钮文本
-4. 配置`self.task_steps`操作步骤
-5. 实现自定义方法（可选）
-6. 在`config.example.yaml`添加对应游戏配置
-7. 在`main.py`导入并添加到执行列表
+完全无需编写代码，仅需配置YAML文件即可：
+1. 在`games/`目录下新建游戏步骤配置文件，比如`hsr.yaml`，编写游戏操作步骤
+2. 在`config.example.yaml`添加对应游戏配置：
+```yaml
+games:
+  hsr:
+    enabled: true
+    name: "崩坏：星穹铁道"
+    steps: "hsr.yaml"
+    auto_close: true
+    apps:
+      游戏:
+        path: "C:\\Path\\To\\StarRail.exe"
+        window_title: "崩坏：星穹铁道"
+        class_name: "UnityWndClass"
+```
+3. 运行时会自动加载配置并执行，无需修改任何核心代码
 
-### 示例：
-```python
-from src.core import MultiAppBase
+### 步骤配置示例：
+```yaml
+# games/hsr.yaml
+- name: "启动游戏"
+  type: "start_app"
+  app_name: "游戏"
+  fail_act: "stop"
 
-class StarRail(MultiAppBase):
-    def __init__(self, config, global_config=None):
-        super().__init__(config)
-        self.buttons = {
-            'login': '登录',
-            'enter': '进入游戏'
-        }
-        self.task_steps = [
-            {'type': 'click', 'text': self.buttons['login']},
-            {'type': 'click', 'text': self.buttons['enter']}
-        ]
+- name: "等待登录按钮出现"
+  type: "wait_for_text"
+  text: "登录"
+  timeout: 30
+
+- name: "点击登录"
+  type: "click"
+  text: "登录"
 ```
 
 ## ⚠️ 注意事项
@@ -123,9 +138,10 @@ mihoyo_games_auto/
 │   └── 04-开发文档/        # 开发相关文档
 │       ├── 01-优化总结.md
 │       └── 02-Bug修复总结.md
-├── games/                  # 🎮 各个游戏实现目录
-│   ├── genshin.py          # 原神实现
-│   └── zzz.py              # 绝区零实现
+├── games/                  # 🎮 各个游戏步骤配置目录（纯YAML，无代码）
+│   ├── genshin.yaml        # 原神步骤配置
+│   ├── zzz.yaml            # 绝区零步骤配置
+│   └── bh3.yaml            # 崩坏3步骤配置
 ├── src/                    # 🧱 核心源码目录
 │   ├── core/               # 核心组件
 │   │   ├── game_base.py    # 游戏基类 + 多应用基类
@@ -137,8 +153,7 @@ mihoyo_games_auto/
 │   ├── config/             # 配置管理
 │   │   ├── config.py       # 配置加载
 │   │   └── logging_config.py # 日志配置
-│   └── utils/              # 工具模块
-│       └── telegram_notifier.py # Telegram通知模块
+│   └── util.py             # 工具模块（音量控制、WOL检测、关机等）
 ├── main.py                 # 🚀 主入口
 ├── requirements.txt        # 📦 依赖列表
 ├── config.example.yaml     # 📄 示例配置文件
