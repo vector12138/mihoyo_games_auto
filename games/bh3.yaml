@@ -3,11 +3,25 @@
   type: "launch_app"
   app_name: "bh3_game"
   timeout: 60
+  fail_act: "stop"
 
 - name: "启动识宝小助手辅助工具"
   type: "launch_app"
   app_name: "bh3_maa"
   timeout: 60
+  fail_act: "stop"
+
+- name: "启动识宝小助手更新窗口"
+  type: "launch_app"
+  app_name: "bh3_maa_update"
+  timeout: 60
+  ignore_error: true
+
+- name: "关闭识宝小助手更新窗口"
+  type: "close_app"
+  app_name: "bh3_maa_update"
+  timeout: 10
+  ignore_error: true
 
 - name: "等待辅助窗口激活"
   type: "sleep"

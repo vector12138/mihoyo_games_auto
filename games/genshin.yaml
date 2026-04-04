@@ -5,11 +5,13 @@
   type: launch_app
   app_name: bettergi
   timeout: 30
+  fail_act: "stop"
 
 - name: 启动原神游戏
   type: launch_app
   app_name: genshin_game
   timeout: 30
+  fail_act: "stop"
 
 - name: 检测是否有新版本弹窗
   type: launch_app

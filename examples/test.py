@@ -1,11 +1,14 @@
 import time
-
+import os
 import cv2
-import paddle
-import paddleocr
+import sys
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+prj_root = os.path.dirname(current_dir)
+
+sys.path.append(prj_root)
 
 from src.core.screen_capture import ScreenCapture
-from src.utils.util import get_prj_root
 
 """
 OCR识别测试脚本
@@ -14,10 +17,11 @@ OCR识别测试脚本
 import os
 import cv2
 from loguru import logger
-from src.core.ocr_recognizer import OCRRecognizer
 from src.config.logging_config import setup_logging
 from src.core.game_base import MultiAppBase
 import uiautomation as auto
+
+
 
 # 配置日志
 setup_logging(log_level="DEBUG")
@@ -72,7 +76,7 @@ def test_capture():
             return
         
         # 保存截图
-        output_path = os.path.join(get_prj_root(), 'tmp', f"test_{i}.png")
+        output_path = os.path.join(prj_root, 'tmp', f"test_{i}.png")
         if not cv2.imwrite(output_path, image):
             logger.error(f"保存截图失败: {output_path}")
         logger.info(f"截图已保存: {output_path}")
@@ -127,14 +131,32 @@ def test_game_base():
 
     test_game_base.run()
 
+def test_telegram_msgs():
+    """
+    测试Telegram消息
+    """
+    import yaml 
+    from datetime import datetime
+    from src import TelegramBridgeApiClient
+
+    with open('config.yaml', 'r', encoding='utf-8') as f:
+        config = yaml.safe_load(f)
+
+    fixed_date = datetime(2026, 3, 31, 12, 0, 0)
+    timestamp = fixed_date.timestamp()
+
+    # 获取Telegram消息
+    telegram_bridge_api_client = TelegramBridgeApiClient(config.get('telegram'))
+    telegram_bridge_api_client.last_processed_timestamp = int(timestamp)
+    msgs = telegram_bridge_api_client.get_new_messages()
+
+    # 打印消息
+    for msg in msgs:
+        logger.info(msg)
+
 if __name__ == "__main__":
     sw = 2
     if sw == 1:
         test_capture()
     elif sw == 2:
-        cur_prj_path = get_prj_root()
-        image_path = os.path.join(cur_prj_path+'\\tmp', "test.png")
-
-        test_ocr(image_path)
-    elif sw == 3:
-        test_game_base()
+        test_telegram_msgs()
