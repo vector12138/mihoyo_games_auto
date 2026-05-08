@@ -89,6 +89,16 @@ def main():
     # 没有需要执行的任务，直接返回
     if not games_to_run:
         logger.warning("没有需要执行的游戏自动化任务")
+
+        # 自动关机
+        if config.get("global.auto_shutdown") or is_wol:
+            logger.info("任务完成，即将自动关机")
+            if notifier:
+                notifier.send_message("🔌 任务完成，即将自动关机")
+            shutdown(delay=60, force=True)
+        else:
+            logger.info("任务完成，不自动关机")
+
         return
     
     # 有需要执行的任务，才执行后续初始化操作
@@ -199,15 +209,18 @@ def main():
             total_msg = f"🎮 所有任务执行完成 成功: {success_count}/{total_count}\n\n{all_results_str}"
             notifier.send_message(total_msg)
         
+    finally:
+        # 无论任务是否成功、是否出错，都全局恢复音量
+        unmute_system_volume()
+
         # 自动关机
         if config.get("global.auto_shutdown") or is_wol:
             logger.info("任务完成，即将自动关机")
             if notifier:
                 notifier.send_message("🔌 任务完成，即将自动关机")
             shutdown(delay=60, force=True)
-    finally:
-        # 无论任务是否成功、是否出错，都全局恢复音量
-        unmute_system_volume()
+        else:
+            logger.info("任务完成，不自动关机")
 
         logger.info("所有任务执行完成")
 
