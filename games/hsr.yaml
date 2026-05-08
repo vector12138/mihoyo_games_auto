@@ -1,0 +1,136 @@
+# 崩坏：星穹铁道自动化配置
+# 基于实际游戏界面流程配置，支持任务日呼、模拟宇宙、忘却之庭、材料副本等
+
+# ----------- 启动阶段 -----------
+- name: "启动游戏"
+  type: start_app
+  app_name: "hsr_game"  # config中对应的应用配置键
+  fail_act: stop
+  timeout: 60
+
+- name: "等待游戏主界面"
+  type: wait_for_text
+  text: "点击进入"
+  timeout: 120
+  fail_act: stop
+
+# ----------- 每日签到 -----------  
+- name: "点击进入游戏"
+  type: click
+  text: "点击进入"
+  timeout: 5
+  fail_act: continue
+
+- name: "等待签到弹窗"
+  type: wait_for_text
+  text: "今日补给"
+  timeout: 10
+  fail_act: continue
+
+- name: "领取每日签到奖励"
+  type: click
+  text: "领取"
+  timeout: 3
+  fail_act: continue
+
+- name: "关闭签到弹窗"
+  type: click
+  text: "确定"
+  timeout: 3
+  fail_act: continue
+
+# ----------- 每日任务 -----------  
+- name: "打开任务界面"
+  type: key_press
+  key: "F4"
+  timeout: 5
+
+- name: "等待任务界面"
+  type: wait_for_text
+  text: "每日实训"
+  timeout: 10
+
+- name: "一键领取每日任务完成奖励"
+  type: click
+  text: "一键领取"
+  timeout: 5
+  fail_act: continue
+
+# ----------- 忘却之庭 -----------  
+- name: "打开地图"
+  type: key_press
+  key: "M"
+  timeout: 5
+
+- name: "前往忘却之庭"  
+  type: click
+  text: "忘却之庭"
+  timeout: 5
+  fail_act: continue
+
+- name: "进入忘却之庭"
+  type: click
+  text: "传送"
+  timeout: 10
+  fail_act: continue
+
+- name: "开始忘却之庭挑战"
+  type: click
+  text: "开始挑战"
+  timeout: 10
+  fail_act: continue
+
+# ----------- 材料副本 (体力消耗) ----------- 
+- name: "回到主界面"
+  type: click
+  text: "返回"  
+  timeout: 5
+  fail_act: continue
+
+- name: "打开星际和平指南"
+  type: click
+  text: "指南"
+  timeout: 5
+
+- name: "选择材料副本"
+  type: click  
+  text: "材料副本"
+  timeout: 5
+
+- name: "消耗剩余体力"
+  type: click
+  text: "进行挑战"
+  timeout: 5
+  fail_act: continue
+
+# ----------- 邮件领取 -----------  
+- name: "打开邮件"
+  type: click
+  text: "邮件"
+  timeout: 5
+  fail_act: continue
+
+- name: "领取所有邮件"
+  type: click
+  text: "全部领取"
+  timeout: 5
+  fail_act: continue
+
+# ----------- 模拟奖励获取 (体力溢出时) ----------- 
+- name: "体力管理检查"
+  type: wait_for_text
+  text: "体力"
+  timeout: 3
+  fail_act: continue
+
+- name: "退出游戏"
+  type: key_sequence
+  keys: ["ALT", "F4"]  # 使用ALT+F4优雅退出
+  timeout: 5
+  fail_act: continue
+
+- name: "确认退出"
+  type: click  
+  text: "确认"
+  timeout: 5
+  fail_act: force

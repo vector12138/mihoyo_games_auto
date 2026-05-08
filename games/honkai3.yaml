@@ -1,0 +1,174 @@
+# 崩坏3自动化配置
+# 米哈游经典第三人称射击+RPG游戏
+
+# ----------- 启动阶段 -----------
+- name: "启动游戏"
+  type: start_app
+  app_name: "honkai3_game"  # config中对应的应用配置键
+  fail_act: stop
+  timeout: 60
+
+- name: "等待游戏主界面"
+  type: wait_for_text
+  text: "点击进入"
+  timeout: 120
+  fail_act: stop
+
+# ----------- 每日签到 -----------  
+- name: "点击进入游戏"
+  type: click
+  text: "点击进入"
+  timeout: 5
+  fail_act: continue
+
+- name: "等待签到弹窗"
+  type: wait_for_text
+  text: "补给"
+  timeout: 10
+  fail_act: continue
+
+- name: "领取每日签到奖励"
+  type: click
+  text: "领取"
+  timeout: 3
+  fail_act: continue
+
+- name: "关闭签到弹窗"
+  type: click
+  text: "确定"
+  timeout: 3
+  fail_act: continue
+
+# ----------- 家园菜单 -----------  
+- name: "进入家园基地"
+  type: click
+  text: "家园"
+  timeout: 5
+  fail_act: continue
+
+- name: "收集家园资源"
+  type: click
+  text: "收集"
+  timeout: 5
+  fail_act: continue
+
+- name: "一键收取家园奖励"
+  type: click
+  text: "一键收取"
+  timeout: 5
+  fail_act: continue
+
+# ----------- 女武神宿舍 -----------  
+- name: "进入女武神宿舍"
+  type: click
+  text: "宿舍"
+  timeout: 5
+  fail_act: continue
+
+- name: "点击女武神互动"
+  type: click
+  text: "互动"
+  timeout: 3
+  fail_act: continue
+
+- name: "领取宿舍奖励"
+  type: click
+  text: "领取"
+  timeout: 3
+  fail_act: continue
+
+# ----------- 战舰引擎室 -----------  
+- name: "打开征服系统"
+  type: click
+  text: "征服"
+  timeout: 5
+  fail_act: continue
+
+- name: "进入战舰引擎室"
+  type: click
+  text: "战舰引擎室"
+  timeout: 5
+  fail_act: continue
+
+- name: "一键收取引擎室奖励"
+  type: click
+  text: "收取"
+  timeout: 5
+  fail_act: continue
+
+# ----------- 日常任务 -----------  
+- name: "打开日常任务"
+  type: click
+  text: "任务"
+  timeout: 5
+  fail_act: continue
+
+- name: "查看日常任务"
+  type: click
+  text: "日常任务"
+  timeout: 3
+  fail_act: continue
+
+- name: "一键领取日常任务奖励"
+  type: click
+  text: "一键领取"
+  timeout: 5
+  fail_act: continue
+
+# ----------- 体力副本 -----------  
+- name: "打开副本列表"
+  type: click
+  text: "出击"
+  timeout: 5
+  fail_act: continue
+
+- name: "选择材料副本"
+  type: click
+  text: "材料"
+  timeout: 5
+  fail_act: continue
+
+- name: "开始体力挑战"
+  type: click
+  text: "挑战"
+  timeout: 5
+  fail_act: continue
+
+# ----------- 邮件领取 -----------  
+- name: "返回主界面"
+  type: click
+  text: "返回"
+  timeout: 5
+  fail_act: continue
+
+- name: "打开邮箱"
+  type: click
+  text: "邮件"
+  timeout: 5
+  fail_act: continue
+
+- name: "领取所有邮件"
+  type: click
+  text: "全部领取"
+  timeout: 5
+  fail_act: continue
+
+# ----------- 体力检查 -----------  
+- name: "体力面板检查"
+  type: wait_for_text
+  text: "体力"
+  timeout: 3
+  fail_act: continue
+
+# ----------- 退出游戏 -----------  
+- name: "退出游戏"
+  type: key_sequence
+  keys: ["ALT", "F4"]  # 使用ALT+F4优雅退出
+  timeout: 5
+  fail_act: continue
+
+- name: "确认退出"
+  type: click
+  text: "退出游戏"
+  timeout: 5
+  fail_act: force
