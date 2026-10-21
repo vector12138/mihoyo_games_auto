@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(python -c \"import json; print\\('Python OK'\\)\")",
+      "Bash(python *)",
+      "Bash(git checkout *)"
     ]
   }
 }

@@ -22,7 +22,7 @@ CREATE_NO_WINDOW = 0x08000000
 
 # 尝试导入Telegram Bridge客户端
 try:
-    from ..telegram_bridge_api_client import get_telegram_bridge_client
+    from ..telegram_bridge_api_client import get_telegram_bridge_client  # type: ignore[reportPossiblyUnboundVariable]
     TELEGRAM_BRIDGE_AVAILABLE = True
 except ImportError:
     TELEGRAM_BRIDGE_AVAILABLE = False
@@ -760,6 +760,33 @@ class MultiAppBase:
             return True
         return False
     
+    def send_telegram_message(self, bot_name: str = 'default', text: str = '',
+                      parse_mode: str = 'HTML', disable_notification: bool = False) -> bool:
+        """
+        发送Telegram消息
+        :param bot_name: Bot名称
+        :param text: 消息文本
+        :param parse_mode: 解析模式
+        :param disable_notification: 是否禁用通知
+        :return: 是否成功
+        """
+        if not self.telegram_bridge_client or not self.telegram_bridge_client.enabled:
+            logger.error(f"Telegram Bridge客户端未初始化或未启用，无法发送消息: {text}")
+            return False
+        try:
+            result = self.telegram_bridge_client.send_message(
+                text=text, parse_mode=parse_mode, disable_notification=disable_notification
+            )
+            if result:
+                logger.info(f"Telegram消息发送成功: {text[:50]}...")
+                return True
+            else:
+                logger.error(f"Telegram消息发送失败: {text[:50]}...")
+                return False
+        except Exception as e:
+            logger.error(f"发送Telegram消息失败: {str(e)}")
+            return False
+
     def execute_step(self, step: Dict) -> bool:
         """
         执行单个操作步骤，支持多应用相关步骤
@@ -771,7 +798,7 @@ class MultiAppBase:
         
         ignore_error = step.get('ignore_error', False)
         try:
-            handler = self.step_handlers.get(step_type)
+            handler = self.step_handlers.get(step_type or '')
             if not handler:
                 error_msg = f"未知步骤类型: {step_type}"
                 if ignore_error:
@@ -866,7 +893,7 @@ class MultiAppBase:
             "warning_steps": warning_steps  # 新增警告步骤字段
         }
     
-    def find_control(self, app_name: Optional[str] = None, properties: Dict = None) -> Optional[ControlInfo]:
+    def find_control(self, app_name: Optional[str] = None, properties: Optional[Dict] = None) -> Optional[ControlInfo]:
         """
         查找控件，支持Win32和UIA控件
         :param app_name: 应用名称，不传则使用当前活跃应用
@@ -897,7 +924,7 @@ class MultiAppBase:
         hwnd = self.app_states[target_app]['hwnd']
         return self.control_operator.find_by_properties(hwnd, properties)
     
-    def click_control_by_properties(self, app_name: Optional[str] = None, properties: Dict = None, double: bool = False) -> bool:
+    def click_control_by_properties(self, app_name: Optional[str] = None, properties: Optional[Dict] = None, double: bool = False) -> bool:
         """
         根据属性点击控件，支持Win32和UIA控件
         :param app_name: 应用名称，不传则使用当前活跃应用
@@ -912,7 +939,7 @@ class MultiAppBase:
         
         return self.control_operator.click(control_info, double)
     
-    def send_text_to_control_by_properties(self, app_name: Optional[str] = None, properties: Dict = None, text: str = "") -> bool:
+    def send_text_to_control_by_properties(self, app_name: Optional[str] = None, properties: Optional[Dict] = None, text: str = "") -> bool:
         """
         根据属性给控件发送文本，支持Win32和UIA控件
         :param app_name: 应用名称，不传则使用当前活跃应用
@@ -928,7 +955,7 @@ class MultiAppBase:
         return self.control_operator.send_text(control_info, text)
     
     # ===================== 层级查找功能封装 =====================
-    def find_control_by_hierarchy(self, app_name: Optional[str] = None, hierarchy: List[Dict] = None) -> Optional[ControlInfo]:
+    def find_control_by_hierarchy(self, app_name: Optional[str] = None, hierarchy: Optional[List[Dict]] = None) -> Optional[ControlInfo]:
         """
         层级查找控件，按照列表顺序一级一级查找，返回最后一级的控件
         :param app_name: 应用名称，不传则使用当前活跃应用
@@ -943,11 +970,11 @@ class MultiAppBase:
         target_app = app_name or self.active_app
         if not target_app:
             logger.error("未指定应用且当前无活跃应用，请传入app_name参数")
-            return False
+            return None
         
         if target_app not in self.app_states or not self.app_states[target_app]['running']:
             logger.error(f"应用[{target_app}]未运行，请先启动")
-            return False
+            return None
         
         hwnd = self.app_states[target_app]['hwnd']
         return self.control_operator.find_by_hierarchy(hwnd, hierarchy)

@@ -5,6 +5,7 @@ import platform
 import psutil
 import win32evtlog
 import subprocess
+import socket
 from loguru import logger
 from typing import Optional
 from datetime import datetime, timedelta
@@ -184,3 +185,34 @@ def shutdown(delay: int = 60, force: bool = False):
     except Exception as e:
         logger.error(f"关机异常: {e}")
         return False
+
+
+def check_internet_connectivity(timeout: int = 3) -> bool:
+    """
+    综合判断是否能连通互联网
+    :param timeout: 单次检测超时（秒）
+    :return: True=联网正常，False=无法联网
+    """
+    # 检测目标：国内 DNS + 百度
+    targets = [
+        ("223.5.5.5", 53),      # 阿里云 DNS
+        ("119.29.29.29", 53),   # DNSPod DNS
+        ("180.76.76.76", 53),   # 百度 DNS
+        ("www.baidu.com", 80),  # 百度 HTTP
+    ]
+
+    success_count = 0
+    for host, port in targets:
+        try:
+            # TCP 连接测试（比 ping 更可靠，不受 ICMP 限制影响）
+            sock = socket.create_connection((host, port), timeout=timeout)
+            sock.close()
+            success_count += 1
+            logger.debug(f"网络检测通过: {host}:{port}")
+        except Exception as e:
+            logger.debug(f"网络检测失败: {host}:{port} - {e}")
+
+    # 至少 2 个目标通才算通过
+    is_connected = success_count >= 2
+    logger.info(f"网络连通性检测: {success_count}/{len(targets)} 通过 -> {'联网正常' if is_connected else '无法联网'}")
+    return is_connected

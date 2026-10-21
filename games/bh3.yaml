@@ -31,6 +31,10 @@
   type: "switch_app"
   app_name: "bh3_maa"
 
+- name: "等待辅助窗口激活"
+  type: "sleep"
+  seconds: 10
+
 - name: "点击开始任务"
   type: "click_control_by_properties"
   fail_act: "stop"
