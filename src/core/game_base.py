@@ -737,6 +737,47 @@ class MultiAppBase:
             disable_notification=disable_notification
         )
     
+    def _telegram_wait_should_fallback(self) -> bool:
+        """
+        判断Telegram超时检测是否应回退为固定计时
+        - 客户端未初始化/未启用：回退（否则步骤会立即失败，把整个游戏任务判为失败）
+        - 开启连通性预检且探测不通过：回退
+        - 其余情况：正常使用Telegram超时检测
+        """
+        client = self.telegram_bridge_client
+        if not client or not client.enabled:
+            logger.warning("Telegram客户端未初始化或未启用")
+            return True
+        if not getattr(client, 'reachability_check', True):
+            logger.info("Telegram连通性预检已关闭（reachability_check=false），按配置使用超时检测")
+            return False
+        return not client.check_api_reachable()
+
+    def _telegram_fallback_seconds(self) -> int:
+        """获取Telegram不可用时的固定计时秒数"""
+        client = self.telegram_bridge_client
+        return int(getattr(client, 'reachability_fallback_seconds', 1800))
+
+    def _fixed_wait(self, seconds: float, reason: str = '') -> None:
+        """
+        固定时长等待，按60秒分段输出剩余时间，便于长时间挂机时观察进度
+        :param seconds: 等待秒数
+        :param reason: 等待原因，写入日志
+        """
+        if seconds <= 0:
+            logger.warning(f"固定等待时长无效: {seconds}秒，跳过等待")
+            return
+        suffix = f" - {reason}" if reason else ''
+        logger.info(f"⏳ 开始固定等待 {seconds:.0f} 秒（{seconds / 60:.1f} 分钟）{suffix}")
+        remaining = float(seconds)
+        while remaining > 0:
+            chunk = min(60.0, remaining)
+            time.sleep(chunk)
+            remaining -= chunk
+            if remaining > 0:
+                logger.info(f"⏳ 固定等待中，剩余 {remaining:.0f} 秒...")
+        logger.info("✅ 固定等待结束")
+
     def _step_wait_for_telegram_text(self, step: Dict) -> bool:
         """处理wait_for_telegram_text步骤"""
         expected_text = step.get('text', '')
@@ -747,6 +788,17 @@ class MultiAppBase:
         if not expected_text:
             logger.error("未指定期望的文本")
             return False
+
+        # Telegram连通性预检：不可达时不再使用Telegram超时检测，改为固定计时
+        if self._telegram_wait_should_fallback():
+            fallback_seconds = self._telegram_fallback_seconds()
+            logger.warning(
+                f"⚠️ Telegram不可用，跳过消息检测（期望文本: '{expected_text}'），"
+                f"改为固定计时 {fallback_seconds} 秒（{fallback_seconds / 60:.1f} 分钟）"
+            )
+            step['_telegram_fallback'] = True
+            self._fixed_wait(fallback_seconds, reason='Telegram不可用时按固定时长计时')
+            return True
         
         message = self.wait_for_telegram_text(
             expected_text=expected_text,

@@ -15,6 +15,10 @@ telegram:
   listen_chat_ids: []         # 监听的聊天ID列表，为空则监听所有聊天
   poll_interval: 1            # 消息轮询间隔（秒）
   command_prefix: "/"         # 命令前缀，识别消息是否为控制命令
+  # 连通性预检：等待Telegram消息前先探测api_url地址，不通则不再使用Telegram超时检测，改为固定计时
+  reachability_check: true              # 是否开启预检（默认true，关闭后行为与旧版本一致）
+  reachability_timeout: 3               # 单次探测超时（秒）
+  reachability_fallback_seconds: 1800   # 预检失败后的固定计时（秒），默认1800=30分钟
 
 # 游戏通用配置
 game_common:

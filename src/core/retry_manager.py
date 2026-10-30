@@ -48,20 +48,20 @@ class RetryManager:
         
         error_str = str(error).lower()
         
-        # 根据错误类型决定是否重试
-        if self.retry_on_timeout and any(keyword in error_str for keyword in ['timeout', 'timed out', '超时']):
-            return True
+        # 根据错误类型决定是否重试：先按关键词归类，命中后由对应开关决定
+        retry_rules = [
+            (self.retry_on_timeout, ('超时', 'timeout', 'timed out', 'time out')),
+            (self.retry_on_image_not_found, ('未找到图像', '未找到图片', 'image not found', 'template not found')),
+            (self.retry_on_network_error, ('网络', '连接', 'network', 'connection', 'socket')),
+            (self.retry_on_game_error, ('游戏', '启动', 'game', 'launch')),
+        ]
+        for enabled, keywords in retry_rules:
+            if any(keyword in error_str for keyword in keywords):
+                if not enabled:
+                    logger.debug(f"异常命中[{keywords[0]}]类型，该类型已配置为不重试: {error}")
+                return enabled
         
-        if self.retry_on_image_not_found and any(keyword in error_str for keyword in ['image not found', 'template not found', '未找到图像']):
-            return True
-        
-        if self.retry_on_network_error and any(keyword in error_str for keyword in ['network', 'connection', 'socket', '网络', '连接']):
-            return True
-        
-        if self.retry_on_game_error and any(keyword in error_str for keyword in ['game', '游戏', 'launch', '启动']):
-            return True
-        
-        # 默认重试所有异常
+        # 未命中任何已知类型，默认重试
         return True
     
     def calculate_delay(self, attempt: int) -> float:

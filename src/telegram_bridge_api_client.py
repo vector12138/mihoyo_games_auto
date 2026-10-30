@@ -5,8 +5,10 @@ Telegram Bridge API 客户端
 通过HTTP API调用telegram-bridge-service的接口，不直接操作Redis
 """
 import time
+import socket
 import requests
-from typing import Dict, List, Optional, Callable
+from typing import Dict, List, Optional, Callable, Tuple
+from urllib.parse import urlparse
 from loguru import logger
 
 
@@ -34,7 +36,14 @@ class TelegramBridgeApiClient:
         self.listen_chat_ids = config.get('listen_chat_ids', [])
         self.poll_interval = float(config.get('poll_interval', 1))
         self.command_prefix = config.get('command_prefix', '/')
-        
+
+        # 连通性预检配置（默认开启）
+        # 开启后，等待Telegram消息前会先探测服务地址，不通则不再使用Telegram超时检测
+        self.reachability_check = bool(config.get('reachability_check', True))
+        self.reachability_timeout = float(config.get('reachability_timeout', 3))
+        self.reachability_fallback_seconds = int(config.get('reachability_fallback_seconds', 1800))
+        self._reachable_cache: Optional[bool] = None
+
         self.running = False
         self.last_processed_timestamp = 0
         self._message_handlers: List[Callable] = []
@@ -50,7 +59,67 @@ class TelegramBridgeApiClient:
                     logger.info(f"✅ Telegram原生API客户端初始化成功，API Host: {self.telegram_api_host}")
             else:
                 logger.info("✅ Telegram Bridge API客户端初始化成功")
-    
+
+    def get_api_endpoint(self) -> Tuple[str, int]:
+        """
+        获取Telegram服务的主机与端口，用于连通性检测
+        :return: (host, port)，无法解析时返回 ('', 0)
+        """
+        raw = self.telegram_api_host if self.mode == 'telegram' else self.api_url
+        raw = str(raw or '').strip()
+        if not raw:
+            return '', 0
+        if '://' not in raw:
+            raw = f'http://{raw}'
+        try:
+            parsed = urlparse(raw)
+            host = parsed.hostname or ''
+            port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+            return host, int(port)
+        except ValueError as e:
+            logger.warning(f"解析Telegram服务地址失败: {raw} - {e}")
+            return '', 0
+
+    def check_api_reachable(self, timeout: Optional[float] = None, force: bool = False) -> bool:
+        """
+        检测Telegram服务地址是否可达
+        采用TCP连接探测而非ICMP：既能验证主机在线，也能验证端口上的服务可用，
+        且不受部分网络屏蔽ICMP的影响；结果在进程内缓存，避免每次等待都重复探测
+        :param timeout: 探测超时（秒），默认取配置项reachability_timeout
+        :param force: 是否忽略缓存重新探测
+        :return: True=可达，False=不可达
+        """
+        if self._reachable_cache is not None and not force:
+            return bool(self._reachable_cache)
+
+        host, port = self.get_api_endpoint()
+        if not host:
+            logger.warning("Telegram服务地址未配置，连通性检测不通过")
+            self._reachable_cache = False
+            return False
+
+        timeout = float(timeout) if timeout is not None else self.reachability_timeout
+        start_time = time.time()
+        sock = None
+        try:
+            sock = socket.create_connection((host, port), timeout=timeout)
+            self._reachable_cache = True
+            logger.info(f"✅ Telegram服务连通性检测通过: {host}:{port}（耗时 {time.time() - start_time:.2f}秒）")
+        except Exception as e:
+            self._reachable_cache = False
+            logger.warning(f"❌ Telegram服务连通性检测失败: {host}:{port} - {e}（耗时 {time.time() - start_time:.2f}秒）")
+        finally:
+            if sock is not None:
+                try:
+                    sock.close()
+                except Exception:
+                    pass
+        return bool(self._reachable_cache)
+
+    def reset_reachability_cache(self):
+        """清除连通性检测缓存，下次检测重新探测"""
+        self._reachable_cache = None
+
     def _request(self, method: str, path: str, params: Dict = None, json: Dict = None) -> Optional[Dict]:
         """
         发送API请求
